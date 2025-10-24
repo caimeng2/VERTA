@@ -1,0 +1,21 @@
+defaults:
+  glob: "*.csv"
+  columns: { x: "Headset.Head.Position.X", z: "Headset.Head.Position.Z", t: "Time" }
+  scale: 0.2
+  motion_threshold: 0.001
+  radius: 20
+  distance: 100
+  epsilon: 0.015
+  junction: [520, 330]
+
+discover:
+  decision_mode: "hybrid"
+  r_outer: 30       
+  linger_delta: 2.0   
+  cluster_method: "dbscan"
+  angle_eps: 15
+  show_paths: true
+  plot_intercepts: true
+  plot_outliers: true
+  plot_noenter_paths: true
+  include_noenter_in_assignments: true

@@ -1,0 +1,22 @@
+# GUI Dependencies for Route Analyzer
+# Install with: pip install -r requirements_gui.txt
+
+# Core GUI framework
+streamlit>=1.28.0
+
+# Interactive plotting
+plotly>=5.15.0
+
+# Statistical plotting (for prediction heatmaps)
+seaborn>=0.12.0
+
+# Data handling (already in main requirements)
+pandas>=1.5.0
+numpy>=1.21.0
+
+# File handling
+pathlib2>=2.3.0
+
+# Optional: Enhanced UI components
+streamlit-option-menu>=0.3.0
+streamlit-aggrid>=0.3.0
