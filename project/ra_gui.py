@@ -2370,7 +2370,7 @@ class RouteAnalyzerGUI:
                     except Exception as e:
                         st.warning(f"Debug analysis failed: {str(e)}")
 
-                    st.success(f"✅ Discover analysis completed successfully for all {len(st.session_state.junctions)} junctions!")
+                    #st.success(f"✅ Discover analysis completed successfully for all {len(st.session_state.junctions)} junctions!")
                     self.generate_cli_command("discover", results, cluster_method, cluster_params, decision_mode, decision_params)
                 
                 elif analysis_type == "assign":
@@ -3376,6 +3376,7 @@ class RouteAnalyzerGUI:
                                 head_yaw_df = gaze_data_all['head_yaw']
                                 physio_df = gaze_data_all.get('physiological')
                                 pupil_df = gaze_data_all.get('pupil_dilation')
+                                all_heatmaps = gaze_data_all.get('pupil_heatmap_junction', {})
                                 
                                 # Process each junction's data
                                 for i, junction in enumerate(st.session_state.junctions):
@@ -3386,11 +3387,15 @@ class RouteAnalyzerGUI:
                                     junction_physio = physio_df[physio_df['junction'] == i] if physio_df is not None and not physio_df.empty else None
                                     junction_pupil = pupil_df[pupil_df['junction'] == i] if pupil_df is not None and not pupil_df.empty else None
                                     
+                                    # Get heatmap data for this junction
+                                    junction_heatmap = all_heatmaps.get(i) if all_heatmaps else None
+                                    
                                     # Create junction-specific gaze data
                                     gaze_data = {
                                         'head_yaw': junction_head_yaw,
                                         'physiological': junction_physio,
                                         'pupil_dilation': junction_pupil,
+                                        'pupil_heatmap_junction': {i: junction_heatmap} if junction_heatmap else {},
                                         'junction': junction,
                                         'r_outer': r_outer_list[i]
                                     }
@@ -3699,8 +3704,8 @@ class RouteAnalyzerGUI:
                         st.session_state.analysis_results = {}
                     st.session_state.analysis_results["enhanced"] = enhanced_results
                 
-                st.success(f"✅ {analysis_type.capitalize()} analysis completed!")
-                st.rerun()
+                #st.success(f"✅ {analysis_type.capitalize()} analysis completed!")
+                #st.rerun()
                 
         except Exception as e:
             st.error(f"❌ Analysis failed: {str(e)}")
@@ -5731,11 +5736,33 @@ class RouteAnalyzerGUI:
                     physio_window=3.0,
                 )
             
+            # Generate pupil dilation heatmaps for all junctions
+            st.info("🗺️ Generating pupil dilation heatmaps for all junctions...")
+            with st.spinner("Creating spatial heatmaps..."):
+                from ra_gaze import create_per_junction_pupil_heatmap
+                
+                # Get heatmap parameters from session state
+                cell_size = st.session_state.get('pupil_heatmap_cell_size', 3.0)
+                normalization = st.session_state.get('pupil_heatmap_normalization', 'relative')
+                
+                # Generate heatmaps for all junctions
+                all_heatmaps = create_per_junction_pupil_heatmap(
+                    trajectories=processed_trajectories,
+                    junctions=junctions,
+                    r_outer_list=r_outer_list,
+                    cell_size=cell_size,
+                    normalization=normalization,
+                    base_index=0  # Start from 0 for all junctions
+                )
+                
+                st.write(f"🔍 **Generated heatmaps for {len(all_heatmaps)} junctions**")
+            
             # Debug: Show results summary
             st.info(f"🔍 **Gaze Analysis Results Summary:**")
             st.write(f"- Head yaw records: {len(head_yaw_df)}")
             st.write(f"- Physiological records: {len(physio_df)}")
             st.write(f"- Pupil dilation records: {len(pupil_df)}")
+            st.write(f"- Heatmaps generated: {len(all_heatmaps)}")
             
             if len(head_yaw_df) > 0:
                 st.write(f"- Junctions with head yaw data: {sorted(head_yaw_df['junction'].unique())}")
@@ -5748,6 +5775,7 @@ class RouteAnalyzerGUI:
                 'head_yaw': head_yaw_df,
                 'physiological': physio_df,
                 'pupil_dilation': pupil_df,
+                'pupil_heatmap_junction': all_heatmaps,  # Add heatmaps to results
                 'junction': junctions[0],  # Reference junction
                 'r_outer': r_outer_list[0]  # Reference r_outer
             }
@@ -7480,35 +7508,35 @@ class RouteAnalyzerGUI:
                 st.info("No gaze analysis data available for this junction")
                 continue
             
-        # Check if we have comprehensive gaze data or fallback data
-        if isinstance(gaze_data, dict):
-            if 'error' in gaze_data:
-                # Show error information
-                st.error(f"❌ **Gaze Analysis Failed for {junction_key}**")
-                st.write(f"**Error:** {gaze_data['error']}")
-                st.write(f"**Error Type:** {gaze_data['error_type']}")
-                
-                # Show suggestions based on error type
-                if "No assignments found" in gaze_data['error']:
-                    st.info("💡 **Solution:** Run '🔍 Discover Branches' analysis first to create proper assignments")
-                elif "trajectory" in gaze_data['error'].lower():
-                    st.info("💡 **Solution:** Check if trajectories actually pass through this junction")
-                elif "column" in gaze_data['error'].lower():
-                    st.info("💡 **Solution:** Check your gaze column mappings in the Data tab")
-                
-                # Show empty plots with error messages
-                self._render_error_gaze_results(gaze_data, junction_key)
-            elif 'physiological' in gaze_data:
-                # Comprehensive gaze analysis results
-                self._render_comprehensive_gaze_results(gaze_data, junction_key)
+            # Check if we have comprehensive gaze data or fallback data
+            if isinstance(gaze_data, dict):
+                if 'error' in gaze_data:
+                    # Show error information
+                    st.error(f"❌ **Gaze Analysis Failed for {junction_key}**")
+                    st.write(f"**Error:** {gaze_data['error']}")
+                    st.write(f"**Error Type:** {gaze_data['error_type']}")
+                    
+                    # Show suggestions based on error type
+                    if "No assignments found" in gaze_data['error']:
+                        st.info("💡 **Solution:** Run '🔍 Discover Branches' analysis first to create proper assignments")
+                    elif "trajectory" in gaze_data['error'].lower():
+                        st.info("💡 **Solution:** Check if trajectories actually pass through this junction")
+                    elif "column" in gaze_data['error'].lower():
+                        st.info("💡 **Solution:** Check your gaze column mappings in the Data tab")
+                    
+                    # Show empty plots with error messages
+                    self._render_error_gaze_results(gaze_data, junction_key)
+                elif 'physiological' in gaze_data:
+                    # Comprehensive gaze analysis results
+                    self._render_comprehensive_gaze_results(gaze_data, junction_key)
+                else:
+                    # Fallback movement pattern results
+                    st.warning("⚠️ Using fallback visualization")
+                    self._render_fallback_gaze_results(gaze_data, junction_key)
             else:
                 # Fallback movement pattern results
                 st.warning("⚠️ Using fallback visualization")
                 self._render_fallback_gaze_results(gaze_data, junction_key)
-        else:
-            # Fallback movement pattern results
-            st.warning("⚠️ Using fallback visualization")
-            self._render_fallback_gaze_results(gaze_data, junction_key)
     
     def _render_fallback_gaze_results(self, gaze_data, junction_key):
         """Render fallback gaze results when no proper gaze analysis was performed."""
