@@ -51,6 +51,7 @@ try:
         analyze_pupil_dilation_trajectory, 
         plot_pupil_trajectory_analysis
     )
+    from .ra_intent_recognition import analyze_intent_recognition, IntentRecognitionAnalyzer
     from .ra_logging import get_logger
 except ImportError:
     # Fall back to absolute imports (when used standalone)
@@ -72,6 +73,7 @@ except ImportError:
         plot_pupil_dilation_heatmap,
         create_per_junction_pupil_heatmap
     )
+    from ra_intent_recognition import analyze_intent_recognition, IntentRecognitionAnalyzer
     from ra_logging import get_logger
 
 # Configure Streamlit page
@@ -1178,7 +1180,7 @@ class RouteAnalyzerGUI:
             showlegend=True
         ))
         
-        st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': True, 'responsive': True})
+        st.plotly_chart(fig, config={'displayModeBar': True}, width='stretch')
     
     def load_sample_junctions(self):
         """Load sample junctions"""
@@ -1208,7 +1210,7 @@ class RouteAnalyzerGUI:
             st.warning("⚠️ Please load trajectory data first")
             return
         
-        col1, col2 = st.columns([2, 1])
+        col1, col2 = st.columns([3, 1])
         
         with col1:
             st.markdown("### Analysis Configuration")
@@ -1220,6 +1222,7 @@ class RouteAnalyzerGUI:
                 "metrics": "📈 Movement Metrics - Calculate trajectory movement patterns and timing",
                 "gaze": "👁️ Gaze & Physiology - Analyze eye tracking and physiological data",
                 "predict": "🔮 Predict Choices - Predict junction choice patterns",
+                "intent": "🧠 Intent Recognition - Predict route choices BEFORE decision points (ML)",
                 "enhanced": "🚨 Enhanced Analysis - Evacuation planning, risk assessment, and efficiency metrics"
             }
             
@@ -1293,6 +1296,105 @@ class RouteAnalyzerGUI:
                 decision_mode = "hybrid"
                 
                 # REMOVED: All cluster method parameters - not needed for spatial tracking only
+            
+            elif analysis_type == "intent":
+                # Intent Recognition - ML-based early prediction
+                st.markdown("#### 🧠 Intent Recognition Configuration")
+                st.info("🤖 Machine Learning-based prediction of route choices **before** users reach decision points.")
+                
+                # Check if Discover has been run
+                has_discover_results = (st.session_state.analysis_results and 
+                                       'branches' in st.session_state.analysis_results)
+                
+                if has_discover_results:
+                    st.success("✅ Will use branch assignments from your previous 'Discover Branches' analysis")
+                else:
+                    st.warning("⚠️ No 'Discover Branches' results found. Will use default clustering parameters.")
+                    st.info("💡 **Recommended:** Run 'Discover Branches' analysis first to control clustering settings!")
+                
+                # Prediction distances
+                st.markdown("##### Prediction Distances")
+                dist_col1, dist_col2, dist_col3, dist_col4 = st.columns(4)
+                
+                with dist_col1:
+                    intent_dist_100 = st.checkbox("100 units", value=True, help="Predict 100 units before junction")
+                with dist_col2:
+                    intent_dist_75 = st.checkbox("75 units", value=True, help="Predict 75 units before junction")
+                with dist_col3:
+                    intent_dist_50 = st.checkbox("50 units", value=True, help="Predict 50 units before junction")
+                with dist_col4:
+                    intent_dist_25 = st.checkbox("25 units", value=True, help="Predict 25 units before junction")
+                
+                # Build prediction distances list
+                intent_prediction_distances = []
+                if intent_dist_100:
+                    intent_prediction_distances.append(100.0)
+                if intent_dist_75:
+                    intent_prediction_distances.append(75.0)
+                if intent_dist_50:
+                    intent_prediction_distances.append(50.0)
+                if intent_dist_25:
+                    intent_prediction_distances.append(25.0)
+                
+                if not intent_prediction_distances:
+                    st.warning("⚠️ Select at least one prediction distance!")
+                    intent_prediction_distances = [50.0]  # Default
+                
+                # Model configuration
+                st.markdown("##### Model Configuration")
+                model_col1, model_col2 = st.columns(2)
+                
+                with model_col1:
+                    intent_model_type = st.selectbox(
+                        "ML Model:",
+                        ["random_forest", "gradient_boosting"],
+                        index=0,
+                        help="Random Forest: Fast, robust | Gradient Boosting: More accurate but slower"
+                    )
+                
+                with model_col2:
+                    intent_cv_folds = st.number_input(
+                        "Cross-validation Folds:",
+                        value=5,
+                        min_value=2,
+                        max_value=10,
+                        help="Number of folds for cross-validation"
+                    )
+                
+                # Feature configuration
+                with st.expander("🔧 Advanced: Feature Configuration"):
+                    st.markdown("**Features Used:**")
+                    st.markdown("""
+                    - ✅ **Spatial**: Distance, approach angle, lateral offset
+                    - ✅ **Kinematic**: Speed, acceleration, curvature, sinuosity
+                    - ✅ **Gaze** (if available): Gaze angle, alignment, head rotation
+                    - ✅ **Physiological** (if available): Heart rate, pupil dilation
+                    - ✅ **Contextual**: Previous junction choices
+                    """)
+                    
+                    intent_test_split = st.slider(
+                        "Test Set Size (%):",
+                        min_value=10,
+                        max_value=40,
+                        value=20,
+                        help="Percentage of data reserved for testing"
+                    )
+                
+                # Store intent parameters in session state
+                if 'intent_params' not in st.session_state:
+                    st.session_state.intent_params = {}
+                
+                st.session_state.intent_params = {
+                    'prediction_distances': intent_prediction_distances,
+                    'model_type': intent_model_type,
+                    'cv_folds': intent_cv_folds,
+                    'test_split': intent_test_split / 100.0
+                }
+                
+                # Set default values for compatibility
+                cluster_method = "kmeans"
+                seed = 42
+                decision_mode = "hybrid"
             
             elif analysis_type == "discover":
                 # Clustering parameters (used by discover analysis)
@@ -2122,7 +2224,7 @@ class RouteAnalyzerGUI:
                                     
                                     st.write("**First 10 Assignments:**")
                                     if debug_info['assignments_sample']:
-                                        st.dataframe(pd.DataFrame(debug_info['assignments_sample']), use_container_width=True)
+                                        st.dataframe(pd.DataFrame(debug_info['assignments_sample']), width='stretch')
                 
                 elif analysis_type == "metrics":
                     if "metrics" in st.session_state.analysis_results:
@@ -3921,6 +4023,197 @@ class RouteAnalyzerGUI:
                     # Generate CLI command for easy copying
                     self.generate_cli_command("predict", results, cluster_method, cluster_params, decision_mode, decision_params)
                 
+                elif analysis_type == "intent":
+                    # Run intent recognition analysis
+                    import pandas as pd
+                    import numpy as np
+                    import os
+                    
+                    st.info("🧠 Running Intent Recognition Analysis...")
+                    
+                    # Get parameters
+                    intent_params = st.session_state.get('intent_params', {
+                        'prediction_distances': [100.0, 75.0, 50.0, 25.0],
+                        'model_type': 'random_forest',
+                        'cv_folds': 5,
+                        'test_split': 0.2
+                    })
+                    
+                    # Check if we have time data
+                    has_time = all(tr.t is not None and len(tr.t) > 0 for tr in st.session_state.trajectories[:5])
+                    if not has_time:
+                        st.warning("⚠️ Time data not detected. Intent recognition requires temporal information for velocity/acceleration features.")
+                        st.info("💡 Tip: Ensure your CSV files have a time column specified in column mapping.")
+                    
+                    # Check for sklearn
+                    try:
+                        import sklearn
+                    except ImportError:
+                        st.error("❌ scikit-learn not installed!")
+                        st.markdown("""
+                        Intent recognition requires scikit-learn. Install with:
+                        ```bash
+                        pip install scikit-learn
+                        ```
+                        """)
+                        return
+                    
+                    # Create output directory
+                    output_dir = "gui_outputs/intent_recognition"
+                    os.makedirs(output_dir, exist_ok=True)
+                    
+                    # For each junction, run intent recognition
+                    intent_results = {}
+                    
+                    progress_bar = st.progress(0)
+                    status_text = st.empty()
+                    
+                    for junction_idx, junction in enumerate(st.session_state.junctions):
+                        status_text.text(f"Analyzing junction {junction_idx + 1}/{len(st.session_state.junctions)}...")
+                        
+                        try:
+                            # Create junction output directory
+                            junction_output = os.path.join(output_dir, f"junction_{junction_idx}")
+                            os.makedirs(junction_output, exist_ok=True)
+                            
+                            # Try to load existing branch assignments from previous Discover analysis
+                            assignments_df = None
+                            centers = None
+                            
+                            # Check if we have results from a previous analysis
+                            if st.session_state.analysis_results and 'branches' in st.session_state.analysis_results:
+                                branch_results = st.session_state.analysis_results['branches']
+                                junction_key = f"junction_{junction_idx}"
+                                
+                                if junction_key in branch_results:
+                                    assignments_df = branch_results[junction_key].get('assignments')
+                                    centers = branch_results[junction_key].get('centers')
+                                    
+                                    if assignments_df is not None:
+                                        st.info(f"📋 Using existing branch assignments from previous Discover analysis for Junction {junction_idx}")
+                            
+                            # If no existing assignments, run discovery
+                            if assignments_df is None:
+                                st.warning(f"⚠️ No existing branch assignments found for Junction {junction_idx}")
+                                st.info(f"🔍 Running branch discovery with default parameters...")
+                                st.info("💡 **Tip:** Run 'Discover Branches' analysis first to control clustering parameters!")
+                                
+                                r_outer = st.session_state.junction_r_outer.get(junction_idx, 50.0)
+                                
+                                # Run branch discovery with default parameters
+                                assignments_df, summary_df, centers = discover_branches(
+                                    trajectories=st.session_state.trajectories,
+                                    junction=junction,
+                                    k=3,
+                                    decision_mode="hybrid",
+                                    r_outer=r_outer,
+                                    path_length=100.0,
+                                    epsilon=0.05,
+                                    cluster_method="auto",
+                                    out_dir=junction_output
+                                )
+                            
+                            # Filter valid branches (>= 0)
+                            valid_assignments = assignments_df[assignments_df['branch'] >= 0]
+                            
+                            if len(valid_assignments) < 10:
+                                st.warning(f"⚠️ Junction {junction_idx}: Insufficient valid trajectories ({len(valid_assignments)}). Skipping intent analysis.")
+                                intent_results[f"junction_{junction_idx}"] = {
+                                    'error': 'insufficient_data',
+                                    'n_valid_trajectories': len(valid_assignments)
+                                }
+                                continue
+                            
+                            # Count unique branches
+                            n_branches = len(assignments_df[assignments_df['branch'] >= 0]['branch'].unique())
+                            st.success(f"✅ Using {n_branches} branches with {len(valid_assignments)} valid trajectories")
+                            
+                            # Run intent recognition
+                            st.info(f"🤖 Training intent recognition models...")
+                            
+                            results = analyze_intent_recognition(
+                                trajectories=st.session_state.trajectories,
+                                junction=junction,
+                                actual_branches=assignments_df,
+                                output_dir=junction_output,
+                                prediction_distances=intent_params['prediction_distances'],
+                                previous_choices=None  # TODO: Could add multi-junction support
+                            )
+                            
+                            if 'error' in results:
+                                st.error(f"❌ Junction {junction_idx}: {results['error']}")
+                                intent_results[f"junction_{junction_idx}"] = results
+                            else:
+                                st.success(f"✅ Junction {junction_idx}: Intent recognition complete!")
+                                
+                                # Display quick summary
+                                models_trained = results['training_results'].get('models_trained', {})
+                                if models_trained:
+                                    avg_acc = np.mean([m['cv_mean_accuracy'] for m in models_trained.values()])
+                                    st.metric(f"Junction {junction_idx} Avg Accuracy", f"{avg_acc:.1%}")
+                                
+                                intent_results[f"junction_{junction_idx}"] = results
+                        
+                        except Exception as e:
+                            st.error(f"❌ Junction {junction_idx} failed: {str(e)}")
+                            intent_results[f"junction_{junction_idx}"] = {
+                                'error': str(e),
+                                'error_type': type(e).__name__
+                            }
+                        
+                        progress_bar.progress((junction_idx + 1) / len(st.session_state.junctions))
+                    
+                    status_text.text("✅ Intent recognition analysis complete!")
+                    progress_bar.empty()
+                    
+                    # Store results
+                    if st.session_state.analysis_results is None:
+                        st.session_state.analysis_results = {}
+                    st.session_state.analysis_results["intent_recognition"] = intent_results
+                    
+                    # Display summary
+                    st.markdown("### 📊 Intent Recognition Summary")
+                    
+                    successful_junctions = [k for k, v in intent_results.items() 
+                                          if 'error' not in v]
+                    
+                    if successful_junctions:
+                        st.success(f"✅ Successfully analyzed {len(successful_junctions)}/{len(st.session_state.junctions)} junctions")
+                        
+                        # Create summary table
+                        summary_data = []
+                        for junction_key in successful_junctions:
+                            results = intent_results[junction_key]
+                            models = results['training_results'].get('models_trained', {})
+                            
+                            for dist, model_info in models.items():
+                                summary_data.append({
+                                    'Junction': junction_key.replace('junction_', 'J'),
+                                    'Distance (units)': dist,
+                                    'Accuracy': f"{model_info['cv_mean_accuracy']:.1%}",
+                                    'Std Dev': f"±{model_info['cv_std_accuracy']:.1%}",
+                                    'Samples': model_info['n_samples']
+                                })
+                        
+                        if summary_data:
+                            summary_df = pd.DataFrame(summary_data)
+                            st.dataframe(summary_df, width='stretch')
+                        
+                        # Show interpretation
+                        st.markdown("#### 💡 Interpretation")
+                        avg_accuracy = np.mean([float(d['Accuracy'].strip('%')) / 100 for d in summary_data])
+                        
+                        if avg_accuracy > 0.85:
+                            st.success("🟢 **Excellent Predictability**: User intent is highly predictable. Early intervention systems will be very effective!")
+                        elif avg_accuracy > 0.70:
+                            st.info("🟡 **Good Predictability**: Clear patterns exist. Adaptive systems can benefit users.")
+                        else:
+                            st.warning("🔴 **Moderate Predictability**: Behavior is variable. Consider per-user models or additional features.")
+                    else:
+                        st.error("❌ Intent recognition failed for all junctions")
+                    
+                    st.info(f"📁 Detailed results saved to: {output_dir}")
+                
                 elif analysis_type == "enhanced":
                     # Run enhanced analysis for evacuation planning and risk assessment
                     import os
@@ -4372,6 +4665,8 @@ class RouteAnalyzerGUI:
             available_analyses.append("predictions")
         if "choice_patterns" in st.session_state.analysis_results:
             available_analyses.append("choice_patterns")
+        if "intent_recognition" in st.session_state.analysis_results:
+            available_analyses.append("intent_recognition")
         if "enhanced" in st.session_state.analysis_results:
             available_analyses.append("enhanced")
         if "gaze_results" in st.session_state.analysis_results:
@@ -4398,6 +4693,8 @@ class RouteAnalyzerGUI:
                 self.render_flow_graphs()
                 self.render_conditional_probabilities()
                 self.render_pattern_analysis()
+            elif selected_analysis == "intent_recognition":
+                self.render_intent_visualizations()
             elif selected_analysis == "enhanced":
                 self.render_enhanced_visualizations()
             elif selected_analysis == "gaze_results":
@@ -4416,6 +4713,8 @@ class RouteAnalyzerGUI:
                         self.render_flow_graphs()
                 elif "predictions" in st.session_state.analysis_results:
                     self.render_predict_visualizations()
+                elif "intent_recognition" in st.session_state.analysis_results:
+                    self.render_intent_visualizations()
                 elif "enhanced" in st.session_state.analysis_results:
                     self.render_enhanced_visualizations()
                 elif "gaze_results" in st.session_state.analysis_results:
@@ -4446,7 +4745,7 @@ class RouteAnalyzerGUI:
             st.markdown("##### Overall Flow Graph")
             flow_map_path = os.path.join("gui_outputs", "Flow_Graph_Map.png")
             if os.path.exists(flow_map_path):
-                st.image(flow_map_path, use_container_width=True)
+                st.image(flow_map_path, width='stretch')
             else:
                 st.info("Flow graph map not available")
         
@@ -4454,7 +4753,7 @@ class RouteAnalyzerGUI:
             st.markdown("##### Per-Junction Flow Graph")
             per_junction_path = os.path.join("gui_outputs", "Per_Junction_Flow_Graph.png")
             if os.path.exists(per_junction_path):
-                st.image(per_junction_path, use_container_width=True)
+                st.image(per_junction_path, width='stretch')
             else:
                 st.info("Per-junction flow graph not available")
         
@@ -4462,7 +4761,7 @@ class RouteAnalyzerGUI:
         st.markdown("#### Conditional Probability Analysis")
         heatmap_path = os.path.join("gui_outputs", "conditional_probability_heatmap.png")
         if os.path.exists(heatmap_path):
-            st.image(heatmap_path, use_container_width=True)
+            st.image(heatmap_path, width='stretch')
         else:
             st.info("Conditional probability heatmap not available")
         
@@ -4470,7 +4769,7 @@ class RouteAnalyzerGUI:
         st.markdown("#### Behavioral Pattern Distribution")
         pattern_path = os.path.join("gui_outputs", "behavioral_patterns.png")
         if os.path.exists(pattern_path):
-            st.image(pattern_path, use_container_width=True)
+            st.image(pattern_path, width='stretch')
         else:
             st.info("Behavioral pattern analysis not available")
         
@@ -4668,7 +4967,7 @@ class RouteAnalyzerGUI:
             })
         
         df = pd.DataFrame(prob_data)
-        st.dataframe(df, use_container_width=True)
+        st.dataframe(df, width='stretch')
         
         # Show trajectory examples
         st.markdown("#### Example Trajectory Sequences:")
@@ -4775,7 +5074,7 @@ class RouteAnalyzerGUI:
             })
         
         df = pd.DataFrame(prob_data)
-        st.dataframe(df, use_container_width=True)
+        st.dataframe(df, width='stretch')
         
         # Show trajectory examples
         st.markdown("#### Example Trajectory Sequences:")
@@ -4798,12 +5097,12 @@ class RouteAnalyzerGUI:
         with col1:
             st.markdown("#### Overall Flow Graph")
             if "flow_graph_map" in st.session_state.analysis_results:
-                st.image(st.session_state.analysis_results["flow_graph_map"], use_container_width=True)
+                st.image(st.session_state.analysis_results["flow_graph_map"], width='stretch')
         
         with col2:
             st.markdown("#### Per-Junction Flow Graph")
             if "per_junction_flow_graph" in st.session_state.analysis_results:
-                st.image(st.session_state.analysis_results["per_junction_flow_graph"], use_container_width=True)
+                st.image(st.session_state.analysis_results["per_junction_flow_graph"], width='stretch')
     
     def render_discover_visualizations(self):
         """Render discover analysis visualizations"""
@@ -4823,7 +5122,7 @@ class RouteAnalyzerGUI:
             # Display available plots
             intercepts_path = os.path.join(junction_dir, "Decision_Intercepts.png")
             if os.path.exists(intercepts_path):
-                st.image(intercepts_path, caption=f"Decision Intercepts - {junction_key}", use_container_width=True)
+                st.image(intercepts_path, caption=f"Decision Intercepts - {junction_key}", width='stretch')
             else:
                 st.warning(f"Decision intercepts plot not found for {junction_key}")
             
@@ -4837,17 +5136,17 @@ class RouteAnalyzerGUI:
             for plot_file, plot_name in other_plots:
                 plot_path = os.path.join(junction_dir, plot_file)
                 if os.path.exists(plot_path):
-                    st.image(plot_path, caption=f"{plot_name} - {junction_key}", use_container_width=True)
+                    st.image(plot_path, caption=f"{plot_name} - {junction_key}", width='stretch')
             
             # Show branch summary
             if "summary" in branches_data and branches_data["summary"] is not None:
                 st.markdown("**Branch Summary:**")
-                st.dataframe(branches_data["summary"], use_container_width=True)
+                st.dataframe(branches_data["summary"], width='stretch')
             
             # Show assignments preview
             if "assignments" in branches_data and branches_data["assignments"] is not None:
                 st.markdown("**Branch Assignments (first 20):**")
-                st.dataframe(branches_data["assignments"].head(20), use_container_width=True)
+                st.dataframe(branches_data["assignments"].head(20), width='stretch')
     
     def render_assign_visualizations(self):
         """Render assign analysis visualizations"""
@@ -4866,7 +5165,7 @@ class RouteAnalyzerGUI:
             # Show assignment data
             if assignments_df is not None and hasattr(assignments_df, 'head'):
                 st.markdown("**Branch Assignments:**")
-                st.dataframe(assignments_df.head(20), use_container_width=True)
+                st.dataframe(assignments_df.head(20), width='stretch')
                 
                 if len(assignments_df) > 20:
                     st.info(f"Showing first 20 of {len(assignments_df)} assignments")
@@ -4900,7 +5199,7 @@ class RouteAnalyzerGUI:
             
             # Display metrics table
             st.markdown("**Trajectory Metrics:**")
-            st.dataframe(df, use_container_width=True)
+            st.dataframe(df, width='stretch')
             
             # Create distribution visualizations (prefer pre-generated images)
             col1, col2 = st.columns(2)
@@ -4909,7 +5208,7 @@ class RouteAnalyzerGUI:
                 st.markdown("**Total Time Distribution**")
                 img = metrics_images.get("total_time_distribution.png")
                 if img and os.path.exists(img):
-                    st.image(img, use_container_width=True)
+                    st.image(img, width='stretch')
                 else:
                     if 'total_time' in df.columns:
                         valid_times = df['total_time'].dropna()
@@ -4925,7 +5224,7 @@ class RouteAnalyzerGUI:
                 st.markdown("**Average Speed Distribution**")
                 img = metrics_images.get("average_speed_distribution.png")
                 if img and os.path.exists(img):
-                    st.image(img, use_container_width=True)
+                    st.image(img, width='stretch')
                 else:
                     if 'average_speed' in df.columns:
                         valid_speeds = df['average_speed'].dropna()
@@ -4944,7 +5243,7 @@ class RouteAnalyzerGUI:
                 st.markdown("**Total Distance Distribution**")
                 img = metrics_images.get("total_distance_distribution.png")
                 if img and os.path.exists(img):
-                    st.image(img, use_container_width=True)
+                    st.image(img, width='stretch')
                 else:
                     if 'total_distance' in df.columns:
                         valid_distances = df['total_distance'].dropna()
@@ -5001,7 +5300,7 @@ class RouteAnalyzerGUI:
                 if speed_summary:
                     speed_df = pd.DataFrame(speed_summary)
                     st.markdown("**Junction Speed Statistics:**")
-                    st.dataframe(speed_df, use_container_width=True)
+                    st.dataframe(speed_df, width='stretch')
                     
                     # One concise explanation above both diagrams
                     st.markdown("### Speed Analysis")
@@ -5017,7 +5316,7 @@ class RouteAnalyzerGUI:
                         st.markdown("**Speed vs Time Correlation**")
                         img = metrics_images.get("speed_vs_time_correlation.png")
                         if img and os.path.exists(img):
-                            st.image(img, use_container_width=True)
+                            st.image(img, width='stretch')
                         else:
                             st.info("Correlation plot not available yet. Re-run metrics analysis to generate.")
 
@@ -5027,7 +5326,7 @@ class RouteAnalyzerGUI:
                         st.caption("**Exit Speed**: Average speed in 2-5 second window after leaving junction")
                         img = metrics_images.get("entry_exit_speed_by_junction.png")
                         if img and os.path.exists(img):
-                            st.image(img, use_container_width=True)
+                            st.image(img, width='stretch')
                         else:
                             st.info("Entry/Exit bar chart not available yet. Re-run metrics analysis to generate.")
                 
@@ -5036,7 +5335,7 @@ class RouteAnalyzerGUI:
                 speed_detail_cols = [col for col in df.columns if 'speed' in col.lower()]
                 if speed_detail_cols:
                     speed_detail_df = df[speed_detail_cols + ['trajectory_id', 'trajectory_tid']]
-                    st.dataframe(speed_detail_df, use_container_width=True)
+                    st.dataframe(speed_detail_df, width='stretch')
             
             # Junction-specific metrics if available
             if junction_cols:
@@ -5081,13 +5380,13 @@ class RouteAnalyzerGUI:
                 if junction_summary:
                     junction_df = pd.DataFrame(junction_summary)
                     st.markdown("**Junction Statistics (Only trajectories that actually pass through each junction):**")
-                    st.dataframe(junction_df, use_container_width=True)
+                    st.dataframe(junction_df, width='stretch')
                     
                     # Junction timing visualization
                     st.markdown("**Junction Timing Comparison**")
                     img = metrics_images.get("junction_timing_comparison.png")
                     if img and os.path.exists(img):
-                        st.image(img, use_container_width=True)
+                        st.image(img, width='stretch')
                     else:
                         st.info("Timing comparison chart not available yet. Re-run metrics analysis to generate.")
 
@@ -5099,7 +5398,7 @@ class RouteAnalyzerGUI:
                             if name.startswith("timing_distribution_J") and os.path.exists(path):
                                 jlabel = name.replace("timing_distribution_", "").replace(".png", "")
                                 st.markdown(f"**{jlabel.replace('_', ' ')}**")
-                                st.image(path, use_container_width=True)
+                                st.image(path, width='stretch')
                     else:
                         for col in junction_cols:
                             junction_num = col.split('_')[1]
@@ -6574,7 +6873,7 @@ class RouteAnalyzerGUI:
                 # Show sample of assignments
                 if len(chain_df) > 0:
                     st.write(f"**Sample Assignments:**")
-                    st.dataframe(chain_df.head(10), use_container_width=True)
+                    st.dataframe(chain_df.head(10), width='stretch')
                 else:
                     st.warning("⚠️ No trajectories were assigned to this junction!")
                     st.write("**Possible causes:**")
@@ -7846,7 +8145,7 @@ class RouteAnalyzerGUI:
                             st.metric("Valid Heart Rate", 0)
                     
                     # Show gaze data table
-                    st.dataframe(gaze_data.head(20), use_container_width=True)
+                    st.dataframe(gaze_data.head(20), width='stretch')
                     
                     if len(gaze_data) > 20:
                         st.info(f"Showing first 20 of {len(gaze_data)} gaze records")
@@ -7976,7 +8275,7 @@ class RouteAnalyzerGUI:
                 with col3:
                     st.metric("Total Measurements", len(physio_df))
                 
-                st.dataframe(physio_df.head(10), use_container_width=True)
+                st.dataframe(physio_df.head(10), width='stretch')
         
         # Display pupil dilation data
         if 'pupil_dilation' in gaze_data and gaze_data['pupil_dilation'] is not None:
@@ -8000,7 +8299,7 @@ class RouteAnalyzerGUI:
                     if len(valid_change) > 0:
                         st.metric("Avg Pupil Change", f"{valid_change.mean():.2f}")
                 
-                st.dataframe(pupil_df.head(10), use_container_width=True)
+                st.dataframe(pupil_df.head(10), width='stretch')
         
         # Display head yaw data
         if 'head_yaw' in gaze_data and gaze_data['head_yaw'] is not None:
@@ -8022,7 +8321,7 @@ class RouteAnalyzerGUI:
                 with col3:
                     st.metric("Total Measurements", len(head_df))
                 
-                st.dataframe(head_df.head(10), use_container_width=True)
+                st.dataframe(head_df.head(10), width='stretch')
         
         # Create visualizations for comprehensive gaze data
         self._create_comprehensive_gaze_visualizations(gaze_data, junction_key)
@@ -8840,7 +9139,7 @@ class RouteAnalyzerGUI:
         plt.close()
         
         # Display the plot
-        st.image(plot_path, caption=f"Movement Pattern Analysis - {junction_key}", use_container_width=True)
+        st.image(plot_path, caption=f"Movement Pattern Analysis - {junction_key}", width='stretch')
 
     def generate_cli_command(self, analysis_type: str, results: dict, cluster_method: str = "dbscan", cluster_params: dict = None, decision_mode: str = "hybrid", decision_params: dict = None):
         """Generate CLI command for easy copying"""
@@ -9006,7 +9305,7 @@ class RouteAnalyzerGUI:
             
             if df_data:
                 df = pd.DataFrame(df_data)
-                st.dataframe(df, use_container_width=True)
+                st.dataframe(df, width='stretch')
             else:
                 st.info("No conditional probabilities available")
     
@@ -9028,6 +9327,209 @@ class RouteAnalyzerGUI:
                 
                 if "choice_counts" in pattern_data:
                     st.write(f"- Choice counts: {pattern_data['choice_counts']}")
+    
+    def render_intent_visualizations(self):
+        """Render intent recognition analysis visualizations"""
+        st.markdown("### 🧠 Intent Recognition Results")
+        
+        if (st.session_state.analysis_results is None or 
+            "intent_recognition" not in st.session_state.analysis_results):
+            st.info("No intent recognition results available.")
+            return
+        
+        intent_data = st.session_state.analysis_results["intent_recognition"]
+        
+        # Get successful junctions
+        successful_junctions = {k: v for k, v in intent_data.items() if 'error' not in v}
+        
+        if not successful_junctions:
+            st.warning("⚠️ No successful intent recognition results to visualize")
+            return
+        
+        # Junction selector
+        junction_keys = list(successful_junctions.keys())
+        if len(junction_keys) > 1:
+            selected_junction = st.selectbox(
+                "Select Junction:",
+                junction_keys,
+                format_func=lambda x: f"Junction {x.replace('junction_', '')}"
+            )
+        else:
+            selected_junction = junction_keys[0]
+        
+        junction_results = successful_junctions[selected_junction]
+        junction_num = selected_junction.replace('junction_', '')
+        
+        # Summary metrics
+        st.markdown(f"#### Junction {junction_num} Summary")
+        
+        models_trained = junction_results['training_results'].get('models_trained', {})
+        
+        if models_trained:
+            # Create metrics row
+            cols = st.columns(len(models_trained))
+            for idx, (dist, model_info) in enumerate(sorted(models_trained.items())):
+                with cols[idx]:
+                    st.metric(
+                        f"{dist} units",
+                        f"{model_info['cv_mean_accuracy']:.1%}",
+                        f"n={model_info['n_samples']}"
+                    )
+            
+            # Overall accuracy
+            avg_acc = np.mean([m['cv_mean_accuracy'] for m in models_trained.values()])
+            st.markdown(f"**Average Accuracy:** {avg_acc:.1%}")
+            
+            # Interpretation
+            if avg_acc > 0.85:
+                st.success("🟢 Excellent Predictability")
+            elif avg_acc > 0.70:
+                st.info("🟡 Good Predictability")
+            else:
+                st.warning("🔴 Moderate Predictability")
+        
+        # Feature Importance Plot
+        st.markdown("#### Feature Importance")
+        feature_importance_path = os.path.join("gui_outputs", "intent_recognition", 
+                                               f"junction_{junction_num}", 
+                                               "intent_feature_importance.png")
+        if os.path.exists(feature_importance_path):
+            st.image(feature_importance_path, width='stretch')
+        else:
+            st.info("Feature importance plot not available")
+        
+        # Accuracy Analysis Plot
+        st.markdown("#### Prediction Accuracy vs Distance")
+        accuracy_path = os.path.join("gui_outputs", "intent_recognition", 
+                                     f"junction_{junction_num}", 
+                                     "intent_accuracy_analysis.png")
+        if os.path.exists(accuracy_path):
+            st.image(accuracy_path, width='stretch')
+            st.caption("This shows how prediction accuracy improves as users get closer to the junction")
+        else:
+            st.info("Accuracy analysis plot not available")
+        
+        # Test Predictions
+        if 'test_predictions' in junction_results:
+            st.markdown("#### Sample Predictions")
+            
+            test_preds = junction_results['test_predictions']
+            
+            # Show a few example predictions
+            example_count = min(5, len(test_preds))
+            
+            for traj_id in list(test_preds.keys())[:example_count]:
+                pred_info = test_preds[traj_id]
+                actual = pred_info['actual_branch']
+                
+                with st.expander(f"Trajectory: {traj_id} (Actual: Branch {actual})"):
+                    predictions = pred_info['predictions_by_distance']
+                    
+                    # Create visualization
+                    distances = []
+                    predicted_branches = []
+                    confidences = []
+                    correct_flags = []
+                    
+                    for dist in sorted(predictions.keys(), reverse=True):
+                        p = predictions[dist]
+                        distances.append(f"{dist}u")
+                        predicted_branches.append(f"Branch {p['predicted_branch']}")
+                        confidences.append(p['confidence'])
+                        correct_flags.append("✓" if p['correct'] else "✗")
+                    
+                    # Create DataFrame
+                    pred_df = pd.DataFrame({
+                        'Distance Before': distances,
+                        'Predicted': predicted_branches,
+                        'Confidence': [f"{c:.1%}" for c in confidences],
+                        'Correct': correct_flags
+                    })
+                    
+                    st.dataframe(pred_df, width='stretch')
+                    
+                    # Confidence chart
+                    import plotly.graph_objects as go
+                    
+                    fig = go.Figure()
+                    fig.add_trace(go.Scatter(
+                        x=[float(d.replace('u', '')) for d in distances],
+                        y=confidences,
+                        mode='lines+markers',
+                        name='Confidence',
+                        line=dict(color='blue', width=3),
+                        marker=dict(size=10)
+                    ))
+                    fig.update_layout(
+                        title="Prediction Confidence Over Distance",
+                        xaxis_title="Distance to Junction (units)",
+                        yaxis_title="Confidence",
+                        yaxis_range=[0, 1],
+                        height=300
+                    )
+                    st.plotly_chart(fig, width='stretch', key=f"intent_confidence_{junction_num}_{traj_id}")
+        
+        # Feature importance table
+        if 'feature_importance' in junction_results['training_results']:
+            st.markdown("#### Feature Importance (Detailed)")
+            
+            with st.expander("View Feature Importance by Distance"):
+                feature_imp = junction_results['training_results']['feature_importance']
+                
+                for dist in sorted(feature_imp.keys()):
+                    st.markdown(f"**{dist} units before junction:**")
+                    
+                    importance_dict = feature_imp[dist]
+                    sorted_features = sorted(importance_dict.items(), 
+                                           key=lambda x: x[1], reverse=True)
+                    
+                    feat_df = pd.DataFrame(sorted_features[:10], 
+                                          columns=['Feature', 'Importance'])
+                    feat_df['Importance'] = feat_df['Importance'].apply(lambda x: f"{x:.3f}")
+                    
+                    st.dataframe(feat_df, width='stretch')
+                    st.markdown("---")
+        
+        # Download results
+        st.markdown("#### Download Results")
+        
+        results_path = os.path.join("gui_outputs", "intent_recognition", 
+                                    f"junction_{junction_num}", 
+                                    "intent_training_results.json")
+        
+        if os.path.exists(results_path):
+            with open(results_path, 'r') as f:
+                results_json = f.read()
+            
+            st.download_button(
+                label="📥 Download Training Results (JSON)",
+                data=results_json,
+                file_name=f"intent_recognition_junction_{junction_num}.json",
+                mime="application/json"
+            )
+        
+        # Explanation
+        with st.expander("ℹ️ Understanding Intent Recognition"):
+            st.markdown("""
+            **Intent Recognition** predicts which route users will choose **before** they reach decision points.
+            
+            **Key Insights:**
+            - **Higher accuracy at closer distances**: Predictions improve as users approach junctions
+            - **Feature importance**: Shows which trajectory features best predict choices
+            - **Early prediction**: Enables proactive systems that respond before users act
+            
+            **Applications:**
+            - 🗺️ Proactive wayfinding and navigation hints
+            - 🎨 Adaptive UI that highlights likely options
+            - 🚦 Congestion prediction and traffic management
+            - ⚠️ Anomaly detection (unexpected behavior)
+            - ⚡ Performance optimization (asset preloading)
+            
+            **Accuracy Interpretation:**
+            - **>85%**: Excellent - Highly predictable behavior
+            - **70-85%**: Good - Clear patterns exist
+            - **<70%**: Moderate - Variable or exploratory behavior
+            """)
     
     def render_enhanced_visualizations(self):
         """Render enhanced analysis visualizations"""
@@ -9119,7 +9621,7 @@ class RouteAnalyzerGUI:
                 fig = px.bar(df, x="Junction", y="Trajectory Count", color="Branch", 
                            title="Trajectory Distribution by Junction and Branch",
                            hover_data=["Percentage"])
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, width='stretch')
     
     def _render_recommendations(self, recommendations):
         """Render recommendations"""
@@ -9250,7 +9752,7 @@ class RouteAnalyzerGUI:
                            title="Unified Risk Assessment by Junction",
                            color_discrete_map={"HIGH": "red", "MEDIUM": "orange", "LOW": "green"},
                            hover_data=["Trajectory Count", "Concentration", "Route Count"])
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, width='stretch')
     
     def _render_efficiency_metrics(self, efficiency_data):
         """Render efficiency metrics visualizations"""
@@ -9298,14 +9800,14 @@ class RouteAnalyzerGUI:
                             title="Route Efficiency by Junction",
                             color="Route Efficiency",
                             color_continuous_scale="RdYlGn")
-                st.plotly_chart(fig1, use_container_width=True)
+                st.plotly_chart(fig1, width='stretch')
                 
                 # Capacity utilization chart
                 fig2 = px.bar(df, x="Junction", y="Capacity Utilization",
                             title="Capacity Utilization by Junction",
                             color="Capacity Utilization",
                             color_continuous_scale="RdYlGn")
-                st.plotly_chart(fig2, use_container_width=True)
+                st.plotly_chart(fig2, width='stretch')
         
         # Efficiency summary
         st.markdown("##### 📈 Efficiency Summary")
@@ -9419,6 +9921,9 @@ class RouteAnalyzerGUI:
                     st.write("• Efficiency metrics")
                     st.write("• Evacuation analysis")
                     st.write("• Recommendations")
+                    st.write("• Intent recognition models")
+                    st.write("• Feature importance analysis")
+                    st.write("• ML prediction results")
             
             st.success("✅ Export ready!")
             

@@ -38,8 +38,26 @@ The GUI provides:
 - **Gaze and physiological analysis** (head yaw, pupil dilation)
 - **Flow graph generation** and conditional probability analysis
 - **Pattern recognition** and behavioral insights
+- **Intent Recognition** - ML-based early route prediction (see below)
 - **Export capabilities** in multiple formats (JSON, CSV, ZIP)
 - **Multi-junction analysis** with evacuation planning features
+
+### 🧠 Intent Recognition
+
+Predict user route choices **before** they reach decision points using machine learning:
+
+- **Features extracted**: Spatial (distance, angle, offset), kinematic (speed, acceleration, curvature), gaze (if available), physiological (if available), contextual
+- **Models**: Random Forest (fast, robust) or Gradient Boosting (higher accuracy)
+- **Prediction distances**: Configure multiple prediction points (100, 75, 50, 25 units before junction)
+- **Cross-validation**: Built-in model evaluation with customizable folds
+- **Feature importance**: Understand which cues users rely on for decisions
+- **Accuracy analysis**: See how prediction improves as users approach the junction
+
+**Use cases:**
+- Proactive wayfinding systems
+- Predictive content loading
+- Dynamic environment optimization
+- A/B testing of early interventions
 
 See [GUI_README.md](GUI_README.md) for detailed GUI documentation.
 
@@ -301,9 +319,12 @@ discover:
 - **numpy** (≥1.20.0) - Numerical computations
 - **pandas** (≥1.3.0) - Data manipulation and analysis
 - **matplotlib** (≥3.3.0) - Static plotting and visualization
-- **scikit-learn** (≥1.0.0) - Machine learning algorithms
 - **tqdm** (≥4.60.0) - Progress bars
 - **seaborn** (≥0.12.0) - Statistical data visualization
+
+### ML Capabilities (Intent Recognition)
+- **scikit-learn** (≥1.0.0) - Machine learning algorithms (Random Forest, Gradient Boosting)
+- **plotly** (≥5.15.0) - Interactive visualization for feature importance and accuracy analysis
 
 ### Optional Dependencies
 

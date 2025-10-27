@@ -45,8 +45,10 @@ The GUI will automatically open at `http://localhost:8501`
 - **Multiple Zones**: Support for multiple start/end zones
 
 ### 📊 Analysis
-- **Full Analysis**: Complete junction-based choice prediction
-- **Quick Analysis**: Fast analysis with default parameters
+- **Discover Branches**: Automatic junction branch detection with clustering
+- **Predict Choices**: Behavioral pattern recognition and prediction
+- **Intent Recognition**: ML-based early route prediction (NEW!)
+- **Enhanced Analysis**: Multi-junction evacuation planning
 - **Parameter Control**: Adjust all analysis settings
 - **Real-time Status**: Live progress and completion indicators
 
@@ -54,6 +56,7 @@ The GUI will automatically open at `http://localhost:8501`
 - **Flow Graphs**: Interactive flow diagrams
 - **Conditional Probabilities**: Heatmaps and probability matrices
 - **Pattern Analysis**: Behavioral pattern identification
+- **Intent Recognition**: Feature importance, accuracy analysis, sample predictions
 - **Start/End Analysis**: Completion rate and trajectory classification
 
 ### 💾 Export Results
@@ -170,10 +173,33 @@ ls project/ra_gui.py
 - **Modern stack**: Built with current web technologies
 - **Cross-platform**: Works on Windows, Mac, Linux
 
-## 🔮 Future Enhancements
+## 🧠 Intent Recognition Feature
 
-- **Real-time analysis**: Live updates as data changes
-- **Collaborative features**: Share sessions between users
-- **Advanced visualizations**: 3D plots, animations
-- **Machine learning**: Automated pattern detection
-- **Cloud deployment**: Host on cloud platforms
+### Overview
+The Intent Recognition feature uses machine learning to predict user route choices **before** they reach decision points. This enables proactive systems and predictive content loading.
+
+### Key Features
+- **Multi-distance prediction**: Train models at 100, 75, 50, 25 units before junction
+- **Flexible model selection**: Random Forest (fast) or Gradient Boosting (accurate)
+- **Cross-validation**: Built-in model evaluation with custom folds
+- **Feature importance**: Understand which behavioral cues matter most
+- **Accuracy analysis**: See how prediction improves with proximity
+
+### Workflow
+1. **Run Discover Branches** first (to set clustering parameters)
+2. **Select Intent Recognition** in Analysis tab
+3. **Configure** prediction distances, model type, test split
+4. **Run Analysis** to train ML models on historical data
+5. **Visualize** results - feature importance, accuracy over distance, sample predictions
+6. **Export** models and results for production deployment
+
+### Use Cases
+- **Proactive wayfinding**: Show navigation hints before user reaches junction
+- **Predictive content loading**: Preload next area based on predicted route
+- **Dynamic optimization**: Adjust environment before user arrives
+- **A/B testing**: Test early interventions at different prediction distances
+
+### Model Details
+- **Features**: Spatial (distance, angle, offset), kinematic (speed, acceleration, curvature), gaze (if available), physiological (if available), contextual (previous choices)
+- **Evaluation**: Cross-validation with stratified splits
+- **Output**: Feature importance plots, accuracy vs. distance charts, per-junction models

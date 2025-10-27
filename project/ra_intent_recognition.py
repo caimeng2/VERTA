@@ -7,6 +7,7 @@ machine learning on trajectory, gaze, and physiological features.
 
 import os
 import json
+import warnings
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -14,6 +15,11 @@ import seaborn as sns
 from typing import List, Dict, Tuple, Optional, Any
 from dataclasses import dataclass
 from collections import defaultdict
+
+# Suppress sklearn warnings about invalid values in division
+warnings.filterwarnings('ignore', category=RuntimeWarning, message='invalid value encountered in divide')
+warnings.filterwarnings('ignore', category=RuntimeWarning, message='All-NaN slice encountered')
+warnings.filterwarnings('ignore', category=RuntimeWarning, module='sklearn')
 
 try:
     from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
@@ -24,6 +30,7 @@ try:
 except ImportError:
     SKLEARN_AVAILABLE = False
     print("⚠️  scikit-learn not available. Intent recognition features disabled.")
+    print("   Install with: pip install scikit-learn")
 
 try:
     from .ra_data_loader import Trajectory, has_gaze_data, has_physio_data
@@ -34,7 +41,7 @@ except ImportError:
     from ra_geometry import Circle
     from ra_logging import get_logger
 
-logger = get_logger(__name__)
+logger = get_logger()
 
 
 @dataclass
@@ -291,6 +298,7 @@ class IntentRecognitionAnalyzer:
     def features_to_array(self, features: IntentFeatures) -> np.ndarray:
         """Convert IntentFeatures to numpy array for ML"""
         # Build feature vector, replacing None with NaN
+        # Also replace inf values with NaN to avoid sklearn warnings
         feature_vector = [
             features.distance_to_junction,
             features.approach_angle,
@@ -310,7 +318,10 @@ class IntentRecognitionAnalyzer:
             features.previous_junction_choice if features.previous_junction_choice is not None else -1,
         ]
         
-        return np.array(feature_vector, dtype=float)
+        arr = np.array(feature_vector, dtype=float)
+        # Replace inf with nan to avoid sklearn warnings
+        arr[~np.isfinite(arr)] = np.nan
+        return arr
     
     def get_feature_names(self) -> List[str]:
         """Get ordered list of feature names"""
@@ -397,13 +408,26 @@ class IntentRecognitionAnalyzer:
             # Handle NaN values (impute with median)
             nan_mask = np.isnan(X)
             if nan_mask.any():
-                col_medians = np.nanmedian(X, axis=0)
+                # Suppress warning when computing median of all-NaN columns
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore", RuntimeWarning)
+                    col_medians = np.nanmedian(X, axis=0)
+                
                 for col in range(X.shape[1]):
-                    X[nan_mask[:, col], col] = col_medians[col]
+                    # If entire column is NaN, use 0
+                    if np.isnan(col_medians[col]):
+                        X[nan_mask[:, col], col] = 0.0
+                    else:
+                        X[nan_mask[:, col], col] = col_medians[col]
+            
+            # Replace any remaining inf values
+            X = np.nan_to_num(X, nan=0.0, posinf=0.0, neginf=0.0)
             
             # Standardize features
-            scaler = StandardScaler()
-            X_scaled = scaler.fit_transform(X)
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", RuntimeWarning)
+                scaler = StandardScaler()
+                X_scaled = scaler.fit_transform(X)
             
             # Train model
             if self.model_type == "random_forest":
@@ -478,16 +502,20 @@ class IntentRecognitionAnalyzer:
             
             X = self.features_to_array(features).reshape(1, -1)
             
-            # Handle NaN (use training median)
+            # Handle NaN and inf values
             nan_mask = np.isnan(X)
             if nan_mask.any():
-                # Use median from scaler (stored during training)
                 for col in range(X.shape[1]):
                     if nan_mask[0, col]:
-                        X[0, col] = 0.0  # Will be handled by scaler
+                        X[0, col] = 0.0
+            
+            # Replace any remaining inf values
+            X = np.nan_to_num(X, nan=0.0, posinf=0.0, neginf=0.0)
             
             # Scale features
-            X_scaled = self.scalers[dist].transform(X)
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", RuntimeWarning)
+                X_scaled = self.scalers[dist].transform(X)
             
             # Predict
             predicted_branch = int(self.models[dist].predict(X_scaled)[0])
