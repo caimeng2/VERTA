@@ -1178,7 +1178,7 @@ class RouteAnalyzerGUI:
             showlegend=True
         ))
         
-        st.plotly_chart(fig, width='stretch', config={'displayModeBar': True, 'responsive': True})
+        st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': True, 'responsive': True})
     
     def load_sample_junctions(self):
         """Load sample junctions"""
@@ -1842,9 +1842,10 @@ class RouteAnalyzerGUI:
                 
                 with col_scale_info:
                     # Show scale factor from discover analysis if available
-                    if "branches" in st.session_state.get("analysis_results", {}):
+                    analysis_results = st.session_state.get("analysis_results")
+                    if analysis_results and "branches" in analysis_results:
                         discover_scale = None
-                        for junction_key, branch_data in st.session_state.analysis_results["branches"].items():
+                        for junction_key, branch_data in analysis_results["branches"].items():
                             if "scale" in branch_data:
                                 discover_scale = branch_data["scale"]
                                 break
@@ -2121,7 +2122,7 @@ class RouteAnalyzerGUI:
                                     
                                     st.write("**First 10 Assignments:**")
                                     if debug_info['assignments_sample']:
-                                        st.dataframe(pd.DataFrame(debug_info['assignments_sample']), width='stretch')
+                                        st.dataframe(pd.DataFrame(debug_info['assignments_sample']), use_container_width=True)
                 
                 elif analysis_type == "metrics":
                     if "metrics" in st.session_state.analysis_results:
@@ -3072,6 +3073,7 @@ class RouteAnalyzerGUI:
                     # Save metrics to CSV file
                     try:
                         import os
+                        import pandas as pd
                         os.makedirs("gui_outputs", exist_ok=True)
                         df = pd.DataFrame(metrics)
                         csv_path = os.path.join("gui_outputs", "metrics_results.csv")
@@ -3079,6 +3081,274 @@ class RouteAnalyzerGUI:
                         st.info(f"📁 Metrics saved to: {csv_path}")
                     except Exception as e:
                         st.warning(f"⚠️ Could not save metrics to file: {e}")
+
+                    # Generate and save metrics plots for export and visualization reuse
+                    try:
+                        import os
+                        import glob
+                        import pandas as pd
+                        import matplotlib.pyplot as plt
+                        import math
+
+                        metrics_dir = os.path.join("gui_outputs", "metrics")
+                        os.makedirs(metrics_dir, exist_ok=True)
+
+                        metrics_df = pd.DataFrame(metrics)
+
+                        # Helper to safely save and close figures
+                        def _save_fig(path):
+                            plt.tight_layout()
+                            plt.savefig(path, dpi=150)
+                            plt.close()
+
+                        # ---- Utilities for KDE and distribution fitting ----
+                        def _kde_curve(values):
+                            arr = np.asarray(values, dtype=float)
+                            arr = arr[np.isfinite(arr)]
+                            if len(arr) < 2:
+                                return None
+                            std = np.std(arr)
+                            if std == 0:
+                                return None
+                            n = len(arr)
+                            # Silverman's rule of thumb
+                            h = 1.06 * std * (n ** (-1.0 / 5.0))
+                            xs = np.linspace(np.percentile(arr, 1), np.percentile(arr, 99), 200)
+                            diffs = (xs[:, None] - arr[None, :]) / h
+                            kernel = np.exp(-0.5 * diffs * diffs) / (math.sqrt(2.0 * math.pi))
+                            density = np.sum(kernel, axis=1) / (n * h)
+                            return xs, density
+
+                        def _loglik_normal(arr, mu, sigma):
+                            if sigma <= 0:
+                                return -np.inf
+                            return np.sum(-0.5 * np.log(2 * np.pi) - np.log(sigma) - 0.5 * ((arr - mu) / sigma) ** 2)
+
+                        def _loglik_lognormal(arr, mu_log, sigma_log):
+                            if sigma_log <= 0:
+                                return -np.inf
+                            if np.any(arr <= 0):
+                                return -np.inf
+                            z = (np.log(arr) - mu_log) / sigma_log
+                            return np.sum(-0.5 * np.log(2 * np.pi) - np.log(sigma_log) - np.log(arr) - 0.5 * z * z)
+
+                        def _loglik_gamma(arr, k, theta):
+                            if k <= 0 or theta <= 0:
+                                return -np.inf
+                            if np.any(arr <= 0):
+                                return -np.inf
+                            # log pdf = (k-1)ln x - x/theta - k ln theta - lgamma(k)
+                            return np.sum((k - 1) * np.log(arr) - arr / theta - k * np.log(theta) - math.lgamma(k))
+
+                        def _fit_and_plot_overlays(ax, arr, xlabel, base_color, alt_color):
+                            # KDE overlay
+                            kde = _kde_curve(arr)
+                            if kde is not None:
+                                xs_kde, dens_kde = kde
+                                ax.plot(xs_kde, dens_kde, color=alt_color, linewidth=2, alpha=0.9, label="KDE")
+
+                            # Candidate distributions and AIC
+                            candidates = []
+                            n = len(arr)
+                            if n >= 2:
+                                # Normal
+                                mu = float(np.mean(arr))
+                                sigma = float(np.std(arr))
+                                ll_n = _loglik_normal(arr, mu, sigma) if sigma > 0 else -np.inf
+                                aic_n = 2 * 2 - 2 * ll_n  # 2 params
+                                candidates.append({
+                                    "name": "Normal",
+                                    "params": (mu, sigma),
+                                    "aic": aic_n,
+                                    "pdf": lambda x: (1.0 / (sigma * math.sqrt(2 * math.pi))) * np.exp(-0.5 * ((x - mu) / sigma) ** 2),
+                                    "label": f"Normal (μ={mu:.2f}, σ={sigma:.2f})"
+                                })
+
+                                # Log-normal (positive values)
+                                pos = arr[arr > 0]
+                                if len(pos) >= 2 and np.std(np.log(pos)) > 0:
+                                    mu_l = float(np.mean(np.log(pos)))
+                                    sigma_l = float(np.std(np.log(pos)))
+                                    ll_l = _loglik_lognormal(pos, mu_l, sigma_l)
+                                    aic_l = 2 * 2 - 2 * ll_l  # 2 params
+                                    candidates.append({
+                                        "name": "LogNormal",
+                                        "params": (mu_l, sigma_l),
+                                        "aic": aic_l,
+                                        "pdf": lambda x: np.where(x > 0, (1.0 / (x * sigma_l * math.sqrt(2 * math.pi))) * np.exp(-0.5 * ((np.log(x) - mu_l) / sigma_l) ** 2), 0.0),
+                                        "label": f"LogNormal (μlog={mu_l:.2f}, σlog={sigma_l:.2f})"
+                                    })
+
+                                # Gamma (method of moments)
+                                if np.all(arr > 0) and np.var(arr) > 0:
+                                    mean = float(np.mean(arr))
+                                    var = float(np.var(arr))
+                                    k = mean * mean / var
+                                    theta = var / mean
+                                    ll_g = _loglik_gamma(arr, k, theta)
+                                    aic_g = 2 * 2 - 2 * ll_g  # 2 params (k, theta)
+                                    candidates.append({
+                                        "name": "Gamma",
+                                        "params": (k, theta),
+                                        "aic": aic_g,
+                                        "pdf": lambda x: np.where(x > 0, (x ** (k - 1)) * np.exp(-x / theta) / (math.gamma(k) * (theta ** k)), 0.0),
+                                        "label": f"Gamma (k={k:.2f}, θ={theta:.2f})"
+                                    })
+
+                            if candidates:
+                                best = min(candidates, key=lambda c: c["aic"])
+                                xs = np.linspace(np.percentile(arr, 1), np.percentile(arr, 99), 200)
+                                ax.plot(xs, best["pdf"](xs), color=base_color, linewidth=2.5, label=f"Best: {best['label']} (AIC {best['aic']:.1f})")
+                                ax.legend()
+
+                        # 1) Total Time Distribution (+ KDE and best-fit distribution)
+                        if "total_time" in metrics_df.columns and metrics_df["total_time"].notna().any():
+                            plt.figure(figsize=(8, 4))
+                            vals = metrics_df["total_time"].dropna().to_numpy()
+                            ax = plt.gca()
+                            ax.hist(vals, bins=30, color="#4C78A8", alpha=0.55, density=True, edgecolor="none")
+                            _fit_and_plot_overlays(ax, vals, xlabel="Seconds", base_color="#1F77B4", alt_color="#4C78A8")
+                            ax.set_title("Total Time Distribution (s)")
+                            ax.set_xlabel("Seconds")
+                            ax.set_ylabel("Density")
+                            _save_fig(os.path.join(metrics_dir, "total_time_distribution.png"))
+
+                        # 2) Average Speed Distribution (+ KDE and best-fit distribution)
+                        if "average_speed" in metrics_df.columns and metrics_df["average_speed"].notna().any():
+                            plt.figure(figsize=(8, 4))
+                            vals = metrics_df["average_speed"].dropna().to_numpy()
+                            ax = plt.gca()
+                            ax.hist(vals, bins=30, color="#F58518", alpha=0.55, density=True, edgecolor="none")
+                            _fit_and_plot_overlays(ax, vals, xlabel="Speed", base_color="#DD8452", alt_color="#F58518")
+                            ax.set_title("Average Speed Distribution")
+                            ax.set_xlabel("Speed")
+                            ax.set_ylabel("Density")
+                            _save_fig(os.path.join(metrics_dir, "average_speed_distribution.png"))
+
+                        # 3) Total Distance Distribution (+ KDE and best-fit distribution)
+                        if "total_distance" in metrics_df.columns and metrics_df["total_distance"].notna().any():
+                            plt.figure(figsize=(8, 4))
+                            vals = metrics_df["total_distance"].dropna().to_numpy()
+                            ax = plt.gca()
+                            ax.hist(vals, bins=30, color="#54A24B", alpha=0.55, density=True, edgecolor="none")
+                            _fit_and_plot_overlays(ax, vals, xlabel="Distance", base_color="#2CA02C", alt_color="#54A24B")
+                            ax.set_title("Total Distance Distribution")
+                            ax.set_xlabel("Distance")
+                            ax.set_ylabel("Density")
+                            _save_fig(os.path.join(metrics_dir, "total_distance_distribution.png"))
+
+                        # Discover junction-related columns
+                        junction_time_cols = [c for c in metrics_df.columns if c.startswith("junction_") and c.endswith("_time")]
+                        speed_cols = [c for c in metrics_df.columns if c.startswith("junction_") and c.endswith("_speed")]
+
+                        # 4) Speed vs Time Correlation (means per junction for selected speed metrics)
+                        # Use average transit speed if available; else fall back to generic _speed
+                        suffix_candidates = ["_avg_transit_speed", "_speed"]
+                        chosen_speed_cols = []
+                        for sfx in suffix_candidates:
+                            candidate = [c for c in speed_cols if c.endswith(sfx)]
+                            if candidate:
+                                chosen_speed_cols = candidate
+                                break
+                        if chosen_speed_cols and junction_time_cols:
+                            means_speed = []
+                            means_time = []
+                            labels = []
+                            for sc in chosen_speed_cols:
+                                jn = sc.split("_")[1]
+                                tc = f"junction_{jn}_time"
+                                if tc in metrics_df.columns:
+                                    df_pair = metrics_df[[sc, tc]].dropna()
+                                    if len(df_pair) > 0:
+                                        means_speed.append(df_pair[sc].mean())
+                                        means_time.append(df_pair[tc].mean())
+                                        labels.append(f"J{jn}")
+                            if means_speed and means_time:
+                                plt.figure(figsize=(6, 6))
+                                plt.scatter(means_time, means_speed, c="#4C78A8")
+                                for x, y, lab in zip(means_time, means_speed, labels):
+                                    plt.annotate(lab, (x, y), xytext=(5, 5), textcoords='offset points', fontsize=8)
+                                plt.title("Speed vs Time (means per junction)")
+                                plt.xlabel("Time (s)")
+                                plt.ylabel("Speed")
+                                _save_fig(os.path.join(metrics_dir, "speed_vs_time_correlation.png"))
+
+                        # 5) Entry vs Exit Speed by Junction (grouped bars)
+                        entry_cols = [c for c in metrics_df.columns if c.endswith("_entry_speed")]
+                        exit_cols = [c for c in metrics_df.columns if c.endswith("_exit_speed")]
+                        if entry_cols and exit_cols:
+                            data = []
+                            labels_j = []
+                            for ec in entry_cols:
+                                jn = ec.split("_")[1]
+                                xc = f"junction_{jn}_exit_speed"
+                                if xc in metrics_df.columns:
+                                    e_vals = metrics_df[ec].dropna()
+                                    x_vals = metrics_df[xc].dropna()
+                                    if len(e_vals) > 0 and len(x_vals) > 0:
+                                        data.append((e_vals.mean(), x_vals.mean()))
+                                        labels_j.append(f"J{jn}")
+                            if data:
+                                entry_means = [d[0] for d in data]
+                                exit_means = [d[1] for d in data]
+                                x = np.arange(len(labels_j))
+                                width = 0.35
+                                plt.figure(figsize=(max(6, len(labels_j) * 0.6), 4))
+                                plt.bar(x - width/2, entry_means, width, label='Entry', color='#72B7B2')
+                                plt.bar(x + width/2, exit_means, width, label='Exit', color='#E45756')
+                                plt.xticks(x, labels_j)
+                                plt.title("Entry vs Exit Speed by Junction")
+                                plt.xlabel("Junction")
+                                plt.ylabel("Speed")
+                                plt.legend()
+                                _save_fig(os.path.join(metrics_dir, "entry_exit_speed_by_junction.png"))
+
+                        # 6) Junction Timing Comparison (average times)
+                        if junction_time_cols:
+                            jt_labels = []
+                            jt_means = []
+                            for tc in sorted(junction_time_cols, key=lambda c: int(c.split('_')[1])):
+                                jn = tc.split("_")[1]
+                                vals = metrics_df[tc].dropna()
+                                if len(vals) > 0:
+                                    jt_labels.append(f"J{jn}")
+                                    jt_means.append(vals.mean())
+                            if jt_labels:
+                                x = np.arange(len(jt_labels))
+                                plt.figure(figsize=(max(6, len(jt_labels) * 0.6), 4))
+                                plt.bar(x, jt_means, color="#4C78A8")
+                                plt.xticks(x, jt_labels)
+                                plt.title("Average Junction Timing")
+                                plt.xlabel("Junction")
+                                plt.ylabel("Time (s)")
+                                _save_fig(os.path.join(metrics_dir, "junction_timing_comparison.png"))
+
+                        # 7) Individual Junction Timing Distributions (per junction) (+ KDE and best-fit distribution)
+                        if junction_time_cols:
+                            for tc in sorted(junction_time_cols, key=lambda c: int(c.split('_')[1])):
+                                jn = tc.split("_")[1]
+                                vals = metrics_df[tc].dropna().to_numpy()
+                                if len(vals) > 0:
+                                    plt.figure(figsize=(8, 4))
+                                    ax = plt.gca()
+                                    ax.hist(vals, bins=30, color="#B279A2", alpha=0.55, density=True, edgecolor="none")
+                                    _fit_and_plot_overlays(ax, vals, xlabel="Seconds", base_color="#A05FA3", alt_color="#B279A2")
+                                    ax.set_title(f"Junction {jn} Timing Distribution (s)")
+                                    ax.set_xlabel("Seconds")
+                                    ax.set_ylabel("Density")
+                                    _save_fig(os.path.join(metrics_dir, f"timing_distribution_J{jn}.png"))
+
+                        # Store paths in session for downstream tabs
+                        try:
+                            images = {}
+                            for p in glob.glob(os.path.join(metrics_dir, "*.png")):
+                                images[os.path.basename(p)] = p
+                            st.session_state.analysis_results.setdefault("metrics_images", images)
+                        except Exception:
+                            pass
+
+                    except Exception as e:
+                        st.warning(f"⚠️ Could not generate metrics plots: {e}")
                     
                     # Provide detailed success message
                     success_msg = f"✅ Computed metrics for {len(metrics)} trajectories"
@@ -4176,7 +4446,7 @@ class RouteAnalyzerGUI:
             st.markdown("##### Overall Flow Graph")
             flow_map_path = os.path.join("gui_outputs", "Flow_Graph_Map.png")
             if os.path.exists(flow_map_path):
-                st.image(flow_map_path, width='stretch')
+                st.image(flow_map_path, use_container_width=True)
             else:
                 st.info("Flow graph map not available")
         
@@ -4184,7 +4454,7 @@ class RouteAnalyzerGUI:
             st.markdown("##### Per-Junction Flow Graph")
             per_junction_path = os.path.join("gui_outputs", "Per_Junction_Flow_Graph.png")
             if os.path.exists(per_junction_path):
-                st.image(per_junction_path, width='stretch')
+                st.image(per_junction_path, use_container_width=True)
             else:
                 st.info("Per-junction flow graph not available")
         
@@ -4192,7 +4462,7 @@ class RouteAnalyzerGUI:
         st.markdown("#### Conditional Probability Analysis")
         heatmap_path = os.path.join("gui_outputs", "conditional_probability_heatmap.png")
         if os.path.exists(heatmap_path):
-            st.image(heatmap_path, width='stretch')
+            st.image(heatmap_path, use_container_width=True)
         else:
             st.info("Conditional probability heatmap not available")
         
@@ -4200,7 +4470,7 @@ class RouteAnalyzerGUI:
         st.markdown("#### Behavioral Pattern Distribution")
         pattern_path = os.path.join("gui_outputs", "behavioral_patterns.png")
         if os.path.exists(pattern_path):
-            st.image(pattern_path, width='stretch')
+            st.image(pattern_path, use_container_width=True)
         else:
             st.info("Behavioral pattern analysis not available")
         
@@ -4398,7 +4668,7 @@ class RouteAnalyzerGUI:
             })
         
         df = pd.DataFrame(prob_data)
-        st.dataframe(df, width='stretch')
+        st.dataframe(df, use_container_width=True)
         
         # Show trajectory examples
         st.markdown("#### Example Trajectory Sequences:")
@@ -4505,7 +4775,7 @@ class RouteAnalyzerGUI:
             })
         
         df = pd.DataFrame(prob_data)
-        st.dataframe(df, width='stretch')
+        st.dataframe(df, use_container_width=True)
         
         # Show trajectory examples
         st.markdown("#### Example Trajectory Sequences:")
@@ -4528,12 +4798,12 @@ class RouteAnalyzerGUI:
         with col1:
             st.markdown("#### Overall Flow Graph")
             if "flow_graph_map" in st.session_state.analysis_results:
-                st.image(st.session_state.analysis_results["flow_graph_map"], width='stretch')
+                st.image(st.session_state.analysis_results["flow_graph_map"], use_container_width=True)
         
         with col2:
             st.markdown("#### Per-Junction Flow Graph")
             if "per_junction_flow_graph" in st.session_state.analysis_results:
-                st.image(st.session_state.analysis_results["per_junction_flow_graph"], width='stretch')
+                st.image(st.session_state.analysis_results["per_junction_flow_graph"], use_container_width=True)
     
     def render_discover_visualizations(self):
         """Render discover analysis visualizations"""
@@ -4553,7 +4823,7 @@ class RouteAnalyzerGUI:
             # Display available plots
             intercepts_path = os.path.join(junction_dir, "Decision_Intercepts.png")
             if os.path.exists(intercepts_path):
-                st.image(intercepts_path, caption=f"Decision Intercepts - {junction_key}", width='stretch')
+                st.image(intercepts_path, caption=f"Decision Intercepts - {junction_key}", use_container_width=True)
             else:
                 st.warning(f"Decision intercepts plot not found for {junction_key}")
             
@@ -4567,17 +4837,17 @@ class RouteAnalyzerGUI:
             for plot_file, plot_name in other_plots:
                 plot_path = os.path.join(junction_dir, plot_file)
                 if os.path.exists(plot_path):
-                    st.image(plot_path, caption=f"{plot_name} - {junction_key}", width='stretch')
+                    st.image(plot_path, caption=f"{plot_name} - {junction_key}", use_container_width=True)
             
             # Show branch summary
             if "summary" in branches_data and branches_data["summary"] is not None:
                 st.markdown("**Branch Summary:**")
-                st.dataframe(branches_data["summary"], width='stretch')
+                st.dataframe(branches_data["summary"], use_container_width=True)
             
             # Show assignments preview
             if "assignments" in branches_data and branches_data["assignments"] is not None:
                 st.markdown("**Branch Assignments (first 20):**")
-                st.dataframe(branches_data["assignments"].head(20), width='stretch')
+                st.dataframe(branches_data["assignments"].head(20), use_container_width=True)
     
     def render_assign_visualizations(self):
         """Render assign analysis visualizations"""
@@ -4596,7 +4866,7 @@ class RouteAnalyzerGUI:
             # Show assignment data
             if assignments_df is not None and hasattr(assignments_df, 'head'):
                 st.markdown("**Branch Assignments:**")
-                st.dataframe(assignments_df.head(20), width='stretch')
+                st.dataframe(assignments_df.head(20), use_container_width=True)
                 
                 if len(assignments_df) > 20:
                     st.info(f"Showing first 20 of {len(assignments_df)} assignments")
@@ -4621,6 +4891,7 @@ class RouteAnalyzerGUI:
         st.markdown("### Metrics Analysis Results")
         
         metrics_data = st.session_state.analysis_results["metrics"]
+        metrics_images = st.session_state.analysis_results.get("metrics_images", {})
         
         if metrics_data:
             # Convert to DataFrame for better display
@@ -4629,60 +4900,61 @@ class RouteAnalyzerGUI:
             
             # Display metrics table
             st.markdown("**Trajectory Metrics:**")
-            st.dataframe(df, width='stretch')
+            st.dataframe(df, use_container_width=True)
             
-            # Create distribution visualizations
+            # Create distribution visualizations (prefer pre-generated images)
             col1, col2 = st.columns(2)
             
             with col1:
                 st.markdown("**Total Time Distribution**")
-                if 'total_time' in df.columns:
-                    # Filter out NaN values for visualization
-                    valid_times = df['total_time'].dropna()
-                    if len(valid_times) > 0:
-                        # Sort by value and create histogram
-                        sorted_times = valid_times.sort_values().reset_index(drop=True)
-                        st.bar_chart(sorted_times)
-                        
-                        # Show distribution statistics
-                        st.caption(f"Range: {sorted_times.min():.1f}s - {sorted_times.max():.1f}s")
-                        st.caption(f"Mean: {sorted_times.mean():.1f}s, Median: {sorted_times.median():.1f}s")
-                    else:
-                        st.info("No valid time data available")
+                img = metrics_images.get("total_time_distribution.png")
+                if img and os.path.exists(img):
+                    st.image(img, use_container_width=True)
+                else:
+                    if 'total_time' in df.columns:
+                        valid_times = df['total_time'].dropna()
+                        if len(valid_times) > 0:
+                            sorted_times = valid_times.sort_values().reset_index(drop=True)
+                            st.bar_chart(sorted_times)
+                            st.caption(f"Range: {sorted_times.min():.1f}s - {sorted_times.max():.1f}s")
+                            st.caption(f"Mean: {sorted_times.mean():.1f}s, Median: {sorted_times.median():.1f}s")
+                        else:
+                            st.info("No valid time data available")
             
             with col2:
                 st.markdown("**Average Speed Distribution**")
-                if 'average_speed' in df.columns:
-                    # Filter out NaN values for visualization
-                    valid_speeds = df['average_speed'].dropna()
-                    if len(valid_speeds) > 0:
-                        # Sort by value and create histogram
-                        sorted_speeds = valid_speeds.sort_values().reset_index(drop=True)
-                        st.bar_chart(sorted_speeds)
-                        
-                        # Show distribution statistics
-                        st.caption(f"Range: {sorted_speeds.min():.2f} - {sorted_speeds.max():.2f}")
-                        st.caption(f"Mean: {sorted_speeds.mean():.2f}, Median: {sorted_speeds.median():.2f}")
-                    else:
-                        st.info("No valid speed data available")
+                img = metrics_images.get("average_speed_distribution.png")
+                if img and os.path.exists(img):
+                    st.image(img, use_container_width=True)
+                else:
+                    if 'average_speed' in df.columns:
+                        valid_speeds = df['average_speed'].dropna()
+                        if len(valid_speeds) > 0:
+                            sorted_speeds = valid_speeds.sort_values().reset_index(drop=True)
+                            st.bar_chart(sorted_speeds)
+                            st.caption(f"Range: {sorted_speeds.min():.2f} - {sorted_speeds.max():.2f}")
+                            st.caption(f"Mean: {sorted_speeds.mean():.2f}, Median: {sorted_speeds.median():.2f}")
+                        else:
+                            st.info("No valid speed data available")
             
             # Add distance visualization
             col3, col4 = st.columns(2)
             
             with col3:
                 st.markdown("**Total Distance Distribution**")
-                if 'total_distance' in df.columns:
-                    valid_distances = df['total_distance'].dropna()
-                    if len(valid_distances) > 0:
-                        # Sort by value and create histogram
-                        sorted_distances = valid_distances.sort_values().reset_index(drop=True)
-                        st.bar_chart(sorted_distances)
-                        
-                        # Show distribution statistics
-                        st.caption(f"Range: {sorted_distances.min():.1f} - {sorted_distances.max():.1f}")
-                        st.caption(f"Mean: {sorted_distances.mean():.1f}, Median: {sorted_distances.median():.1f}")
-                    else:
-                        st.info("No valid distance data available")
+                img = metrics_images.get("total_distance_distribution.png")
+                if img and os.path.exists(img):
+                    st.image(img, use_container_width=True)
+                else:
+                    if 'total_distance' in df.columns:
+                        valid_distances = df['total_distance'].dropna()
+                        if len(valid_distances) > 0:
+                            sorted_distances = valid_distances.sort_values().reset_index(drop=True)
+                            st.bar_chart(sorted_distances)
+                            st.caption(f"Range: {sorted_distances.min():.1f} - {sorted_distances.max():.1f}")
+                            st.caption(f"Mean: {sorted_distances.mean():.1f}, Median: {sorted_distances.median():.1f}")
+                        else:
+                            st.info("No valid distance data available")
             
             with col4:
                 st.markdown("**Summary Statistics**")
@@ -4729,7 +5001,7 @@ class RouteAnalyzerGUI:
                 if speed_summary:
                     speed_df = pd.DataFrame(speed_summary)
                     st.markdown("**Junction Speed Statistics:**")
-                    st.dataframe(speed_df, width='stretch')
+                    st.dataframe(speed_df, use_container_width=True)
                     
                     # One concise explanation above both diagrams
                     st.markdown("### Speed Analysis")
@@ -4743,149 +5015,28 @@ class RouteAnalyzerGUI:
 
                     with col_speed1:
                         st.markdown("**Speed vs Time Correlation**")
-                        if speed_cols and junction_cols:
-                            # Speed metric selection (excluding "Speed Through Junction")
-                            speed_options = {
-                                "Entry Speed": "_entry_speed", 
-                                "Exit Speed": "_exit_speed",
-                                "Average Transit Speed": "_avg_transit_speed"
-                            }
-                            
-                            selected_speed_type = st.selectbox(
-                                "Select speed metric:",
-                                list(speed_options.keys()),
-                                key="speed_time_correlation"
-                            )
-                            
-                            speed_suffix = speed_options[selected_speed_type]
-                            
-                            # Find matching speed and time columns
-                            speed_time_data = []
-                            colors = ['red', 'blue', 'green', 'orange', 'purple', 'brown', 'pink', 'gray']
-                            
-                            # Filter speed columns to only include the selected type
-                            filtered_speed_cols = [col for col in speed_cols if col.endswith(speed_suffix)]
-                            
-                            for i, speed_col in enumerate(filtered_speed_cols):
-                                junction_num = speed_col.split('_')[1]
-                                time_col = f"junction_{junction_num}_time"
-                                
-                                if time_col in df.columns:
-                                    # Get valid data points where both speed and time are available
-                                    valid_data = df[[speed_col, time_col]].dropna()
-                                    if len(valid_data) > 0:
-                                        speed_time_data.append({
-                                            "Junction": f"J{junction_num}",
-                                            "Speed": valid_data[speed_col].mean(),
-                                            "Time": valid_data[time_col].mean(),
-                                            "Color": colors[i % len(colors)]
-                                        })
-                            
-                            if speed_time_data:
-                                speed_time_df = pd.DataFrame(speed_time_data)
-                                
-                                # Create interactive scatter plot with different colors per junction
-                                fig = go.Figure()
-                                
-                                for _, row in speed_time_df.iterrows():
-                                    fig.add_trace(go.Scatter(
-                                        x=[row['Time']],
-                                        y=[row['Speed']],
-                                        mode='markers',
-                                        name=row['Junction'],
-                                        marker=dict(
-                                            size=12,
-                                            color=row['Color'],
-                                            line=dict(width=2, color='black')
-                                        ),
-                                        hovertemplate=f"<b>{row['Junction']}</b><br>" +
-                                                     f"Time: {row['Time']:.2f}s<br>" +
-                                                     f"Speed: {row['Speed']:.2f}<extra></extra>"
-                                    ))
-                                
-                                fig.update_layout(
-                                    xaxis_title="Time (seconds)",
-                                    yaxis_title="Speed",
-                                    showlegend=True,
-                                    hovermode='closest'
-                                )
-                                
-                                st.plotly_chart(fig, width='stretch')
-                                
-                                # Show correlation coefficient
-                                if len(speed_time_df) > 1:
-                                    correlation = speed_time_df['Speed'].corr(speed_time_df['Time'])
-                                    st.caption(f"Correlation: {correlation:.3f}")
-                    
+                        img = metrics_images.get("speed_vs_time_correlation.png")
+                        if img and os.path.exists(img):
+                            st.image(img, use_container_width=True)
+                        else:
+                            st.info("Correlation plot not available yet. Re-run metrics analysis to generate.")
+
                     with col_speed2:
                         st.markdown("**Entry vs Exit Speed Analysis**")
                         st.caption("**Entry Speed**: Average speed in 2-5 second window before entering junction")
                         st.caption("**Exit Speed**: Average speed in 2-5 second window after leaving junction")
-                        
-                        entry_exit_data = []
-                        # Get unique junction numbers from entry speed columns only
-                        entry_speed_cols = [col for col in speed_cols if col.endswith('_entry_speed')]
-                        
-                        for col in entry_speed_cols:
-                            junction_num = col.split('_')[1]
-                            entry_col = f"junction_{junction_num}_entry_speed"
-                            exit_col = f"junction_{junction_num}_exit_speed"
-                            
-                            if entry_col in df.columns and exit_col in df.columns:
-                                entry_speeds = df[entry_col].dropna()
-                                exit_speeds = df[exit_col].dropna()
-                                
-                                if len(entry_speeds) > 0 and len(exit_speeds) > 0:
-                                    entry_exit_data.append({
-                                        "Junction": f"J{junction_num}",
-                                        "Entry Speed": entry_speeds.mean(),
-                                        "Exit Speed": exit_speeds.mean()
-                                    })
-                        
-                        if entry_exit_data:
-                            entry_exit_df = pd.DataFrame(entry_exit_data)
-                            # Create grouped bar chart with gaps between junctions
-                            fig = go.Figure()
-                            
-                            junctions = entry_exit_df['Junction'].tolist()
-                            entry_values = entry_exit_df['Entry Speed'].tolist()
-                            exit_values = entry_exit_df['Exit Speed'].tolist()
-                            
-                            fig.add_trace(go.Bar(
-                                name='Entry Speed',
-                                x=junctions,
-                                y=entry_values,
-                                marker_color='lightblue',
-                                text=[f'{v:.2f}' for v in entry_values],
-                                textposition='outside'
-                            ))
-                            
-                            fig.add_trace(go.Bar(
-                                name='Exit Speed',
-                                x=junctions,
-                                y=exit_values,
-                                marker_color='lightcoral',
-                                text=[f'{v:.2f}' for v in exit_values],
-                                textposition='outside'
-                            ))
-                            
-                            fig.update_layout(
-                                title="Entry vs Exit Speed by Junction",
-                                xaxis_title="Junction",
-                                yaxis_title="Speed",
-                                barmode='group',
-                                bargap=0.4,  # Gap between junction groups
-                                bargroupgap=0.2  # Gap between bars within group
-                            )
-                            
-                            st.plotly_chart(fig, width='stretch')
+                        img = metrics_images.get("entry_exit_speed_by_junction.png")
+                        if img and os.path.exists(img):
+                            st.image(img, use_container_width=True)
+                        else:
+                            st.info("Entry/Exit bar chart not available yet. Re-run metrics analysis to generate.")
                 
                 # Detailed speed metrics table
                 st.markdown("### Detailed Speed Metrics")
                 speed_detail_cols = [col for col in df.columns if 'speed' in col.lower()]
                 if speed_detail_cols:
                     speed_detail_df = df[speed_detail_cols + ['trajectory_id', 'trajectory_tid']]
-                    st.dataframe(speed_detail_df, width='stretch')
+                    st.dataframe(speed_detail_df, use_container_width=True)
             
             # Junction-specific metrics if available
             if junction_cols:
@@ -4930,28 +5081,26 @@ class RouteAnalyzerGUI:
                 if junction_summary:
                     junction_df = pd.DataFrame(junction_summary)
                     st.markdown("**Junction Statistics (Only trajectories that actually pass through each junction):**")
-                    st.dataframe(junction_df, width='stretch')
+                    st.dataframe(junction_df, use_container_width=True)
                     
                     # Junction timing visualization
                     st.markdown("**Junction Timing Comparison**")
-                    
-                    # Create a summary of average timing per junction
-                    junction_timing_summary = []
-                    for col in junction_cols:
-                        junction_num = col.split('_')[1]
-                        valid_times = df[col].dropna()
-                        if len(valid_times) > 0:
-                            junction_timing_summary.append({
-                                f"Junction {junction_num}": valid_times.mean()
-                            })
-                    
-                    if junction_timing_summary:
-                        # Create a DataFrame for visualization
-                        timing_df = pd.DataFrame(junction_timing_summary)
-                        st.bar_chart(timing_df)
-                        
-                        # Show individual junction timing distributions
-                        st.markdown("**Individual Junction Timing Distributions**")
+                    img = metrics_images.get("junction_timing_comparison.png")
+                    if img and os.path.exists(img):
+                        st.image(img, use_container_width=True)
+                    else:
+                        st.info("Timing comparison chart not available yet. Re-run metrics analysis to generate.")
+
+                    # Show individual junction timing distributions
+                    st.markdown("**Individual Junction Timing Distributions**")
+                    if metrics_images:
+                        # display per-junction histograms if present
+                        for name, path in sorted(metrics_images.items()):
+                            if name.startswith("timing_distribution_J") and os.path.exists(path):
+                                jlabel = name.replace("timing_distribution_", "").replace(".png", "")
+                                st.markdown(f"**{jlabel.replace('_', ' ')}**")
+                                st.image(path, use_container_width=True)
+                    else:
                         for col in junction_cols:
                             junction_num = col.split('_')[1]
                             valid_times = df[col].dropna()
@@ -4960,8 +5109,7 @@ class RouteAnalyzerGUI:
                                 sorted_times = valid_times.sort_values().reset_index(drop=True)
                                 st.bar_chart(sorted_times)
                                 st.caption(f"Range: {sorted_times.min():.2f}s - {sorted_times.max():.2f}s, Mean: {sorted_times.mean():.2f}s")
-                    else:
-                        st.info("No valid junction timing data available for visualization")
+                    
     
     def _analyze_movement_patterns_at_junction(self, trajectories, junction, r_outer, decision_mode, path_length, epsilon):
         """Analyze movement patterns at a junction for regular trajectories (without head tracking data)."""
@@ -6426,7 +6574,7 @@ class RouteAnalyzerGUI:
                 # Show sample of assignments
                 if len(chain_df) > 0:
                     st.write(f"**Sample Assignments:**")
-                    st.dataframe(chain_df.head(10), width='stretch')
+                    st.dataframe(chain_df.head(10), use_container_width=True)
                 else:
                     st.warning("⚠️ No trajectories were assigned to this junction!")
                     st.write("**Possible causes:**")
@@ -7698,7 +7846,7 @@ class RouteAnalyzerGUI:
                             st.metric("Valid Heart Rate", 0)
                     
                     # Show gaze data table
-                    st.dataframe(gaze_data.head(20), width='stretch')
+                    st.dataframe(gaze_data.head(20), use_container_width=True)
                     
                     if len(gaze_data) > 20:
                         st.info(f"Showing first 20 of {len(gaze_data)} gaze records")
@@ -7828,7 +7976,7 @@ class RouteAnalyzerGUI:
                 with col3:
                     st.metric("Total Measurements", len(physio_df))
                 
-                st.dataframe(physio_df.head(10), width='stretch')
+                st.dataframe(physio_df.head(10), use_container_width=True)
         
         # Display pupil dilation data
         if 'pupil_dilation' in gaze_data and gaze_data['pupil_dilation'] is not None:
@@ -7852,7 +8000,7 @@ class RouteAnalyzerGUI:
                     if len(valid_change) > 0:
                         st.metric("Avg Pupil Change", f"{valid_change.mean():.2f}")
                 
-                st.dataframe(pupil_df.head(10), width='stretch')
+                st.dataframe(pupil_df.head(10), use_container_width=True)
         
         # Display head yaw data
         if 'head_yaw' in gaze_data and gaze_data['head_yaw'] is not None:
@@ -7874,7 +8022,7 @@ class RouteAnalyzerGUI:
                 with col3:
                     st.metric("Total Measurements", len(head_df))
                 
-                st.dataframe(head_df.head(10), width='stretch')
+                st.dataframe(head_df.head(10), use_container_width=True)
         
         # Create visualizations for comprehensive gaze data
         self._create_comprehensive_gaze_visualizations(gaze_data, junction_key)
@@ -8692,7 +8840,7 @@ class RouteAnalyzerGUI:
         plt.close()
         
         # Display the plot
-        st.image(plot_path, caption=f"Movement Pattern Analysis - {junction_key}", width='stretch')
+        st.image(plot_path, caption=f"Movement Pattern Analysis - {junction_key}", use_container_width=True)
 
     def generate_cli_command(self, analysis_type: str, results: dict, cluster_method: str = "dbscan", cluster_params: dict = None, decision_mode: str = "hybrid", decision_params: dict = None):
         """Generate CLI command for easy copying"""
@@ -8858,7 +9006,7 @@ class RouteAnalyzerGUI:
             
             if df_data:
                 df = pd.DataFrame(df_data)
-                st.dataframe(df, width='stretch')
+                st.dataframe(df, use_container_width=True)
             else:
                 st.info("No conditional probabilities available")
     
@@ -8971,7 +9119,7 @@ class RouteAnalyzerGUI:
                 fig = px.bar(df, x="Junction", y="Trajectory Count", color="Branch", 
                            title="Trajectory Distribution by Junction and Branch",
                            hover_data=["Percentage"])
-                st.plotly_chart(fig, width='stretch')
+                st.plotly_chart(fig, use_container_width=True)
     
     def _render_recommendations(self, recommendations):
         """Render recommendations"""
@@ -9102,7 +9250,7 @@ class RouteAnalyzerGUI:
                            title="Unified Risk Assessment by Junction",
                            color_discrete_map={"HIGH": "red", "MEDIUM": "orange", "LOW": "green"},
                            hover_data=["Trajectory Count", "Concentration", "Route Count"])
-                st.plotly_chart(fig, width='stretch')
+                st.plotly_chart(fig, use_container_width=True)
     
     def _render_efficiency_metrics(self, efficiency_data):
         """Render efficiency metrics visualizations"""
@@ -9150,14 +9298,14 @@ class RouteAnalyzerGUI:
                             title="Route Efficiency by Junction",
                             color="Route Efficiency",
                             color_continuous_scale="RdYlGn")
-                st.plotly_chart(fig1, width='stretch')
+                st.plotly_chart(fig1, use_container_width=True)
                 
                 # Capacity utilization chart
                 fig2 = px.bar(df, x="Junction", y="Capacity Utilization",
                             title="Capacity Utilization by Junction",
                             color="Capacity Utilization",
                             color_continuous_scale="RdYlGn")
-                st.plotly_chart(fig2, width='stretch')
+                st.plotly_chart(fig2, use_container_width=True)
         
         # Efficiency summary
         st.markdown("##### 📈 Efficiency Summary")
