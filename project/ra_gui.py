@@ -1970,7 +1970,7 @@ class RouteAnalyzerGUI:
                     "Trajectory Source:",
                     ["Upload files", "Select folder"],
                     key="assign_trajectory_option",
-                    help="Choose how to provide trajectory data"
+                    help="Upload new trajectories to be assigned to existing branches"
                 )
                 
                 # Centers input
@@ -1990,14 +1990,14 @@ class RouteAnalyzerGUI:
                         type=['csv'],
                         accept_multiple_files=True,
                         key="assign_trajectory_files",
-                        help="Upload CSV files containing trajectory data"
+                        help="Upload CSV files containing trajectory data to be assigned to existing branches"
                     )
                 else:  # Select folder
                     st.markdown("**📁 Select Trajectory Folder:**")
                     trajectory_folder = st.text_input(
                         "Trajectory folder path:",
                         key="assign_trajectory_folder",
-                        help="Enter the path to the folder containing trajectory CSV files"
+                        help="Enter the path to the folder containing trajectory CSV files to be assigned to existing branches"
                     )
                 
                 if centers_option == "Upload files":
@@ -2019,30 +2019,150 @@ class RouteAnalyzerGUI:
                 
                 # Assignment parameters
                 st.markdown("**⚙️ Assignment Parameters:**")
-                col_pathlen, col_epsilon = st.columns(2)
+                # Decision mode selector (mirror discover logic with selectbox)
+                # Default from discover if available
+                default_mode = "hybrid"
+                if centers_option == "Use session centers" and st.session_state.get("analysis_results") and "branches" in st.session_state.analysis_results:
+                    # Try to fetch from first matching junction block
+                    for _jk, _bd in st.session_state.analysis_results["branches"].items():
+                        if isinstance(_bd, dict) and "decision_mode" in _bd:
+                            default_mode = _bd.get("decision_mode", default_mode)
+                            break
                 
-                with col_pathlen:
-                    assign_path_length = st.number_input(
-                        "Decision Distance (path length):",
-                        value=100.0,
-                        min_value=10.0,
-                        max_value=500.0,
-                        step=10.0,
-                        key="assign_path_length",
-                        help="Path length for decision point detection"
+                col_decision_mode, col_decision_param = st.columns(2)
+                with col_decision_mode:
+                    assign_decision_mode = st.selectbox(
+                        "Decision Mode:",
+                        ["pathlen", "radial", "hybrid"],
+                        index=["pathlen","radial","hybrid"].index(default_mode) if default_mode in ["pathlen","radial","hybrid"] else 2,
+                        key="assign_decision_mode",
+                        help="How to compute initial direction vectors for assignment"
                     )
                 
-                with col_epsilon:
-                    assign_epsilon = st.number_input(
-                        "Movement Threshold (epsilon):",
-                        value=0.05,
-                        min_value=0.001,
-                        max_value=1.0,
-                        step=0.001,
-                        format="%.3f",
-                        key="assign_epsilon",
-                        help="Minimum movement threshold for trajectory analysis"
+                # Auto-rediscovery (always available when uploading new trajectories)
+                st.markdown("**🧭 Auto-Discover New Branches (optional):**")
+                auto_col1, auto_col2, auto_col3 = st.columns(3)
+                with auto_col1:
+                    st.checkbox(
+                        "Enable auto-rediscover",
+                        value=False,
+                        key="assign_auto_rediscover",
+                        help="If outlier assignments form a dense region of size ≥ min samples, rerun discovery for this junction using all trajectories (existing + newly uploaded)."
                     )
+                with auto_col2:
+                    st.number_input(
+                        "Min samples for new branch",
+                        value=5,
+                        min_value=2,
+                        max_value=100,
+                        step=1,
+                        key="assign_auto_min_samples",
+                        help="Minimum outlier vectors required to trigger rediscovery."
+                    )
+                with auto_col3:
+                    st.number_input(
+                        "Angle eps (deg)",
+                        value=11.0,
+                        min_value=1.0,
+                        max_value=90.0,
+                        step=1.0,
+                        key="assign_auto_angle_eps",
+                        help="Angular neighborhood size for detecting a dense outlier region."
+                    )
+
+                # Decision mode parameters in second column (mirror discover UI)
+                with col_decision_param:
+                    # Fetch defaults from discover if using session centers
+                    pref_path_length = 100.0
+                    pref_linger = 0.0
+                    pref_epsilon = 0.05
+                    if centers_option == "Use session centers" and st.session_state.get("analysis_results") and "branches" in st.session_state.analysis_results:
+                        for _jk, _bd in st.session_state.analysis_results["branches"].items():
+                            if isinstance(_bd, dict):
+                                if "path_length" in _bd:
+                                    pref_path_length = float(_bd.get("path_length", pref_path_length))
+                                if "linger_delta" in _bd:
+                                    pref_linger = float(_bd.get("linger_delta", pref_linger))
+                                if "epsilon" in _bd:
+                                    pref_epsilon = float(_bd.get("epsilon", pref_epsilon))
+                                break
+                    
+                    if assign_decision_mode == "radial":
+                        st.info("ℹ️ Using r_outer from junctions (or stored discover results)")
+                        assign_r_outer = None  # Will be fetched per junction
+                        assign_epsilon = st.number_input(
+                            "Epsilon:",
+                            value=pref_epsilon,
+                            min_value=0.001,
+                            max_value=1.0,
+                            step=0.001,
+                            format="%.3f",
+                            key="assign_epsilon",
+                            help="Minimum movement threshold"
+                        )
+                        assign_path_length = 100.0
+                        assign_linger_delta = 0.0
+                    elif assign_decision_mode == "pathlen":
+                        assign_path_length = st.number_input(
+                            "Path Length:",
+                            value=pref_path_length,
+                            min_value=10.0,
+                            max_value=500.0,
+                            step=10.0,
+                            key="assign_path_length",
+                            help="Path length for decision point"
+                        )
+                        assign_linger_delta = st.number_input(
+                            "Linger Delta:",
+                            value=pref_linger,
+                            min_value=0.0,
+                            max_value=200.0,
+                            step=1.0,
+                            key="assign_linger_delta",
+                            help="Linger distance beyond junction"
+                        )
+                        assign_epsilon = st.number_input(
+                            "Epsilon:",
+                            value=pref_epsilon,
+                            min_value=0.001,
+                            max_value=1.0,
+                            step=0.001,
+                            format="%.3f",
+                            key="assign_epsilon",
+                            help="Minimum movement threshold"
+                        )
+                        assign_r_outer = None
+                    elif assign_decision_mode == "hybrid":
+                        st.info("ℹ️ Using r_outer from junctions (or stored discover results)")
+                        assign_r_outer = None  # Will be fetched per junction
+                        assign_path_length = st.number_input(
+                            "Hybrid Path Length:",
+                            value=pref_path_length,
+                            min_value=10.0,
+                            max_value=500.0,
+                            step=10.0,
+                            key="assign_path_length",
+                            help="Path length for hybrid mode"
+                        )
+                        assign_linger_delta = st.number_input(
+                            "Hybrid Linger Delta:",
+                            value=pref_linger,
+                            min_value=0.0,
+                            max_value=200.0,
+                            step=1.0,
+                            key="assign_linger_delta",
+                            help="Linger distance for hybrid mode"
+                        )
+                        assign_epsilon = st.number_input(
+                            "Epsilon:",
+                            value=pref_epsilon,
+                            min_value=0.001,
+                            max_value=1.0,
+                            step=0.001,
+                            format="%.3f",
+                            key="assign_epsilon",
+                            help="Minimum movement threshold"
+                        )
                 
                 # Junction parameters for external data (only show if not using session centers)
                 if centers_option != "Use session centers":
@@ -2134,6 +2254,10 @@ class RouteAnalyzerGUI:
                     # Get assignment parameters
                     assign_path_length = st.session_state.get("assign_path_length", 100.0)
                     assign_epsilon = st.session_state.get("assign_epsilon", 0.05)
+                    # Auto-rediscover controls
+                    assign_auto_rediscover = st.session_state.get("assign_auto_rediscover", False)
+                    assign_auto_min_samples = st.session_state.get("assign_auto_min_samples", 5)
+                    assign_auto_angle_eps = st.session_state.get("assign_auto_angle_eps", 15.0)
                     
                     # Get trajectory and centers options
                     trajectory_option = st.session_state.get("assign_trajectory_option", "Upload files")
@@ -2159,6 +2283,12 @@ class RouteAnalyzerGUI:
                         "path_length": assign_path_length,
                         "epsilon": assign_epsilon,
                         "assign_scale": assign_scale,  # Add assign-specific scale factor
+                        "decision_mode": assign_decision_mode,
+                        "r_outer": assign_r_outer,
+                        "linger_delta": assign_linger_delta,
+                        "auto_rediscover": assign_auto_rediscover,
+                        "auto_min_samples": assign_auto_min_samples,
+                        "auto_angle_eps": assign_auto_angle_eps,
                         "trajectory_option": trajectory_option,
                         "centers_option": centers_option,
                         "trajectory_files": trajectory_files,
@@ -2479,6 +2609,7 @@ class RouteAnalyzerGUI:
                 
                 elif analysis_type == "assign":
                     # Assign trajectories to branches using simplified interface
+                    import numpy as np
                     
                     # Load trajectories based on trajectory option
                     trajectories = self.load_assign_trajectories(assign_params)
@@ -2612,15 +2743,96 @@ class RouteAnalyzerGUI:
                             os.makedirs(out_dir, exist_ok=True)
                             
                             # Run assignment
+                            # Determine decision parameters to use
+                            dm = assign_params.get("decision_mode", "pathlen")
+                            ld = assign_params.get("linger_delta", 0.0)
+                            dm_r_outer = assign_params.get("r_outer", r_outer)
+
                             assignments = assign_branches(
                                 trajectories=trajectories,
                                 centers=centers,
                                 junction=junction,
                                 path_length=stored_path_length,
                                 epsilon=stored_epsilon,
-                                r_outer=r_outer,
+                                decision_mode=dm,
+                                r_outer=dm_r_outer,
+                                linger_delta=ld,
                                 out_dir=out_dir
                             )
+
+                            # Optional: auto-rediscover if outlier cluster among new assignments is large enough
+                            try:
+                                auto_flag = st.session_state.get("assign_auto_rediscover", False)
+                                min_samples_new = int(st.session_state.get("assign_auto_min_samples", 5))
+                                angle_eps_new = float(st.session_state.get("assign_auto_angle_eps", 15.0))
+                                # Auto-rediscover: detect dense outlier regions among newly uploaded trajectories
+                                if auto_flag and len(assignments) > 0:
+                                    # Identify outliers (-1) that entered junction and have usable vectors
+                                    from ra_decisions import compute_assignment_vectors
+                                    from ra_clustering import cluster_angles_dbscan
+                                    # Compute vectors for these trajectories with same decision params
+                                    vec_df = compute_assignment_vectors(
+                                        trajectories=trajectories,
+                                        junction=junction,
+                                        path_length=stored_path_length,
+                                        decision_mode=dm,
+                                        r_outer=dm_r_outer,
+                                        epsilon=stored_epsilon,
+                                    )
+                                    # Merge to filter to current outliers only
+                                    outlier_ids = set(assignments[assignments["branch"] == -1]["trajectory"].tolist())
+                                    if outlier_ids:
+                                        use = vec_df[(vec_df["trajectory"].isin(outlier_ids)) & (vec_df["entered"]) & (vec_df["usable"])].copy()
+                                        if len(use) >= min_samples_new:
+                                            V = np.vstack([use[["vx","vz"]].to_numpy()]) if len(use) else np.zeros((0,2))
+                                            if V.size:
+                                                labels_o, centers_o = cluster_angles_dbscan(V, eps_deg=angle_eps_new, min_samples=min_samples_new)
+                                                # If any valid cluster exists (label >=0), trigger rediscovery using all available trajectories
+                                                if (labels_o >= 0).any():
+                                                    st.info(f"🔄 Auto-rediscover triggered for {junction_key}: detected dense outlier region (min_samples={min_samples_new}, angle_eps={angle_eps_new}°)")
+                                                    # Build combined trajectory set: existing session trajectories + newly provided
+                                                    all_trajs = []
+                                                    if hasattr(st.session_state, 'trajectories') and st.session_state.trajectories:
+                                                        all_trajs.extend(st.session_state.trajectories)
+                                                    all_trajs.extend([t for t in trajectories if t not in all_trajs])
+                                                    # Rerun discovery for this junction
+                                                    from ra_decisions import discover_branches
+                                                    new_assign, _sum, new_centers = discover_branches(
+                                                        trajectories=all_trajs,
+                                                        junction=junction,
+                                                        k=centers.shape[0] if centers is not None and centers.size else 3,
+                                                        path_length=stored_path_length,
+                                                        epsilon=stored_epsilon,
+                                                        seed=seed,
+                                                        decision_mode=dm,
+                                                        r_outer=dm_r_outer,
+                                                        out_dir=out_dir,
+                                                        cluster_method=cluster_method,
+                                                        k_min=st.session_state.get("discover_k_min", 2),
+                                                        k_max=st.session_state.get("discover_k_max", 6),
+                                                        min_sep_deg=st.session_state.get("discover_min_sep_deg", 12.0),
+                                                        angle_eps=st.session_state.get("discover_angle_eps", 15.0),
+                                                        min_samples=min_samples_new,
+                                                        junction_number=junction_num,
+                                                        all_junctions=[junction]
+                                                    )
+                                                    # Update centers to the rediscovered ones and reassign current trajectories for display
+                                                    centers = new_centers
+                                                    assignments = assign_branches(
+                                                        trajectories=trajectories,
+                                                        centers=centers,
+                                                        junction=junction,
+                                                        path_length=stored_path_length,
+                                                        epsilon=stored_epsilon,
+                                                        decision_mode=dm,
+                                                        r_outer=dm_r_outer,
+                                                        linger_delta=ld,
+                                                        out_dir=out_dir
+                                                    )
+                                                    st.warning("⚠️ Branch IDs may have been renumbered due to rediscovery.")
+                            except Exception as _e:
+                                # Keep assignment results even if auto-rediscover path fails
+                                pass
                             
                             # Enhanced debugging for assignment issues
                             if assignments is not None and len(assignments) > 0:

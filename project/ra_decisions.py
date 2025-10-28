@@ -636,6 +636,73 @@ def assign_branches(trajectories,
     return df
 
 
+def compute_assignment_vectors(
+    trajectories: Sequence[Trajectory],
+    junction: Circle,
+    *,
+    path_length: float = 100.0,
+    decision_mode: str = "pathlen",
+    r_outer: Optional[float] = None,
+    epsilon: float = 0.05,
+    linger_delta: float = 0.0,
+) -> pd.DataFrame:
+    """Compute initial unit vectors per trajectory using the same logic as assignment.
+
+    Returns a DataFrame with columns:
+      - trajectory: trajectory id
+      - entered: bool (True if trajectory entered junction)
+      - usable: bool (True if a non-None vector was obtained)
+      - vx, vz: float components of the unit vector (NaN if not usable)
+      - mode_used: str ("radial" or "pathlen") when usable
+    """
+    rows = []
+    for tr in trajectories:
+        entered, _ = entered_junction_idx(tr.x, tr.z, junction)
+        if not entered:
+            rows.append({
+                "trajectory": tr.tid,
+                "entered": False,
+                "usable": False,
+                "vx": float("nan"),
+                "vz": float("nan"),
+                "mode_used": None,
+            })
+            continue
+
+        v, mode_used = _pick_vector_and_source(
+            tr=tr,
+            junction=junction,
+            decision_mode=str(decision_mode),
+            path_length=float(path_length),
+            r_outer=r_outer,
+            epsilon=float(epsilon),
+            linger_delta=float(linger_delta),
+        )
+
+        if v is None:
+            rows.append({
+                "trajectory": tr.tid,
+                "entered": True,
+                "usable": False,
+                "vx": float("nan"),
+                "vz": float("nan"),
+                "mode_used": None,
+            })
+            continue
+
+        v = v / max(1e-12, float(np.linalg.norm(v)))
+        rows.append({
+            "trajectory": tr.tid,
+            "entered": True,
+            "usable": True,
+            "vx": float(v[0]),
+            "vz": float(v[1]),
+            "mode_used": str(mode_used),
+        })
+
+    return pd.DataFrame(rows)
+
+
 
 
 
