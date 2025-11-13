@@ -1,6 +1,6 @@
-# Route Analyzer Test Suite
+# VERTA Test Suite
 
-This directory contains pytest tests for the route_analyzer project.
+This directory contains pytest tests for VERTA (Virtual Environment Route and Trajectory Analyzer).
 
 ## Running Tests
 
@@ -73,7 +73,7 @@ When adding new test files:
 
 ```python
 import pytest
-from ra_geometry import Circle
+from route_analyzer.ra_geometry import Circle
 
 class TestCircle:
     def test_circle_creation(self):

@@ -1,5 +1,7 @@
 """
-Route Analyzer - A toolkit for analyzing route choices from trajectory data.
+VERTA - Virtual Environment Route and Trajectory Analyzer
+
+A comprehensive toolkit for analyzing route choices and trajectories in virtual environments.
 """
 
 __version__ = "0.1.0"

@@ -1,6 +1,6 @@
-# Route Analyzer Web GUI
+# VERTA Web GUI
 
-A modern, interactive web interface for the Route Analyzer package, built with Streamlit.
+A modern, interactive web interface for VERTA (Virtual Environment Route and Trajectory Analyzer), built with Streamlit.
 
 ## 🚀 Quick Start
 
@@ -17,8 +17,8 @@ python launch_gui.py
 # Option 2: Direct Streamlit command
 streamlit run launch_gui.py
 
-# Option 3: From the project directory
-streamlit run project/ra_gui.py
+# Option 3: Direct Streamlit command to GUI module
+streamlit run route_analyzer/ra_gui.py
 ```
 
 ### 3. Open in Browser
@@ -145,7 +145,7 @@ python -c "import streamlit; print('Streamlit OK')"
 cd /path/to/route_analyzer
 
 # Check project structure
-ls project/ra_gui.py
+ls route_analyzer/ra_gui.py
 ```
 
 **Performance issues:**

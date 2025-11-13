@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-Route Analyzer GUI Launcher
-===========================
+VERTA GUI Launcher
+==================
 
-Launch the Streamlit web UI from the repository root.
+Launch the VERTA (Virtual Environment Route and Trajectory Analyzer) web UI from the repository root.
 
 Usage:
   python launch_gui.py
@@ -42,7 +42,7 @@ def main() -> int:
     # Run with repository root as CWD so absolute imports work
     cwd = repo_root
 
-    print("🚀 Launching Route Analyzer GUI...")
+    print("🚀 Launching VERTA GUI...")
     print("   If the browser doesn't open automatically, visit: http://localhost:8501\n")
 
     # Inherit env and run

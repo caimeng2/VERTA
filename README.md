@@ -1,6 +1,6 @@
-# Route Analyzer
+# VERTA - Virtual Environment Route and Trajectory Analyzer
 
-A comprehensive toolkit to analyze initial route choices from x–z movement trajectories: discover branch directions, assign trajectories to branches, compute timing metrics, visualize results, and predict future route choices based on behavioral patterns. Includes both command-line interface (CLI) and interactive web GUI.
+VERTA is a comprehensive toolkit to analyze initial route choices from x–z movement trajectories: discover branch directions, assign trajectories to branches, compute timing metrics, visualize results, and predict future route choices based on behavioral patterns. Includes both command-line interface (CLI) and interactive web GUI.
 
 ## Installation
 
@@ -63,7 +63,7 @@ See [GUI_README.md](GUI_README.md) for detailed GUI documentation.
 
 ## CLI Commands
 
-The Route Analyzer provides 6 main commands for different types of analysis:
+VERTA provides 6 main commands for different types of analysis:
 
 ### 1. Discover Branches
 
@@ -240,7 +240,7 @@ Each command generates specific output files:
 
 ## Behavioral Pattern Analysis
 
-The Route Analyzer identifies three types of behavioral patterns:
+VERTA identifies three types of behavioral patterns:
 
 ### Pattern Types
 
@@ -354,7 +354,7 @@ Additional GUI packages:
 **Import errors:**
 ```bash
 # Ensure you're in the project directory
-cd /path/to/route_analyzer/project
+cd /path/to/route_analyzer
 
 # Check Python path
 python -c "import route_analyzer; print('Package OK')"
@@ -369,7 +369,7 @@ pip install -r requirements_gui.txt
 python -c "import streamlit; print('Streamlit OK')"
 
 # Launch with explicit path
-streamlit run project/ra_gui.py
+streamlit run route_analyzer/ra_gui.py
 ```
 
 **No trajectories loaded:**
