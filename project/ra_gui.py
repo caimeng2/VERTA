@@ -3704,6 +3704,22 @@ class RouteAnalyzerGUI:
                             st.write("- Open the CSV file in a text editor")
                             st.write("- Look at the first few rows of the time column")
                             st.write("- Check for patterns in the data format")
+                    
+                    # Generate CLI command for easy copying
+                    # Build results dict for CLI command generation
+                    metrics_results = {}
+                    for i, junction in enumerate(junctions_to_use):
+                        junction_key = f"junction_{i}"
+                        metrics_results[junction_key] = {
+                            "junction": junction,
+                            "r_outer": st.session_state.junction_r_outer.get(i, 50.0) if i < len(st.session_state.junctions) else 50.0,
+                            "decision_mode": getattr(st.session_state, 'metrics_decision_mode', 'pathlen'),
+                            "distance": getattr(st.session_state, 'metrics_distance', 100.0),
+                            "r_outer_value": st.session_state.junction_r_outer.get(i, 50.0) if i < len(st.session_state.junctions) else 50.0,
+                            "trend_window": getattr(st.session_state, 'metrics_trend_window', 5),
+                            "min_outward": getattr(st.session_state, 'metrics_min_outward', 0.0),
+                        }
+                    self.generate_cli_command("metrics", metrics_results, cluster_method, cluster_params, decision_mode, decision_params)
                 
                 elif analysis_type == "gaze":
                     # Analyze gaze and physiological data
@@ -4107,6 +4123,21 @@ class RouteAnalyzerGUI:
                         st.success(f"✅ Gaze analysis completed successfully for all {total_junctions} junctions!")
                     else:
                         st.warning(f"⚠️ Gaze analysis completed for {successful_junctions}/{total_junctions} junctions")
+                    
+                    # Generate CLI command for easy copying
+                    # Build results dict for CLI command generation
+                    gaze_results_dict = {}
+                    for i, junction in enumerate(st.session_state.junctions):
+                        junction_key = f"junction_{i}"
+                        gaze_results_dict[junction_key] = {
+                            "junction": junction,
+                            "r_outer": st.session_state.junction_r_outer.get(i, 50.0),
+                            "decision_mode": decision_mode,
+                            "path_length": decision_params.get("path_length", 100.0) if decision_params else 100.0,
+                            "epsilon": decision_params.get("epsilon", 0.05) if decision_params else 0.05,
+                            "linger_delta": decision_params.get("linger_delta", 5.0) if decision_params else 5.0,
+                        }
+                    self.generate_cli_command("gaze", gaze_results_dict, cluster_method, cluster_params, decision_mode, decision_params)
                 
                 elif analysis_type == "predict":
                     # Run prediction analysis using spatial tracking only
@@ -4425,6 +4456,25 @@ class RouteAnalyzerGUI:
                         st.error("❌ Intent recognition failed for all junctions")
                     
                     st.info(f"📁 Detailed results saved to: {output_dir}")
+                    
+                    # Generate CLI command for easy copying
+                    # Build results dict for CLI command generation
+                    intent_results_dict = {}
+                    for i, junction in enumerate(st.session_state.junctions):
+                        junction_key = f"junction_{i}"
+                        intent_results_dict[junction_key] = {
+                            "junction": junction,
+                            "r_outer": st.session_state.junction_r_outer.get(i, 50.0),
+                            "decision_mode": decision_mode,
+                            "path_length": decision_params.get("path_length", 100.0) if decision_params else 100.0,
+                            "epsilon": decision_params.get("epsilon", 0.05) if decision_params else 0.05,
+                            "linger_delta": decision_params.get("linger_delta", 5.0) if decision_params else 5.0,
+                            "prediction_distances": intent_params.get('prediction_distances', [100.0, 75.0, 50.0, 25.0]),
+                            "model_type": intent_params.get('model_type', 'random_forest'),
+                            "cv_folds": intent_params.get('cv_folds', 5),
+                            "test_split": intent_params.get('test_split', 0.2),
+                        }
+                    self.generate_cli_command("intent", intent_results_dict, cluster_method, cluster_params, decision_mode, decision_params)
                 
                 elif analysis_type == "enhanced":
                     # Run enhanced analysis for evacuation planning and risk assessment
@@ -9488,6 +9538,169 @@ class RouteAnalyzerGUI:
                 cli_command += f" \\\n  --r_outer_list {decision_params.get('r_outer', 50.0)} \\\n  --distance {decision_params.get('path_length', 100.0)}"
             
             cli_command += f" \\\n  --out ./outputs/prediction"
+            
+            st.code(cli_command, language="bash")
+        
+        elif analysis_type == "metrics":
+            # Generate metrics commands for each junction
+            for junction_key, metrics_data in results.items():
+                if not junction_key.startswith("junction_"):
+                    continue
+                    
+                junction_num = junction_key.split('_')[1]
+                junction = metrics_data.get("junction")
+                if junction is None:
+                    continue
+                
+                r_outer = metrics_data.get("r_outer_value", metrics_data.get("r_outer", 50.0))
+                decision_mode = metrics_data.get("decision_mode", "pathlen")
+                distance = metrics_data.get("distance", 100.0)
+                trend_window = metrics_data.get("trend_window", 5)
+                min_outward = metrics_data.get("min_outward", 0.0)
+                
+                st.markdown(f"#### {junction_key.replace('_', ' ').title()}")
+                
+                # Generate the CLI command
+                cli_command = f"""route-analyzer metrics \\
+  --input ./data \\
+  --columns x=Headset.Head.Position.X,z=Headset.Head.Position.Z,t=Time \\
+  --scale 0.2 \\
+  --junction {junction.cx:.1f} {junction.cz:.1f} \\
+  --radius {junction.r:.1f} \\
+  --decision_mode {decision_mode} \\
+  --distance {distance:.1f}"""
+                
+                if decision_mode in ["radial", "hybrid"]:
+                    cli_command += f" \\\n  --r_outer {r_outer:.1f}"
+                
+                if decision_mode == "radial":
+                    cli_command += f" \\\n  --trend_window {trend_window} \\\n  --min_outward {min_outward:.1f}"
+                
+                cli_command += f" \\\n  --out ./outputs/{junction_key}_metrics"
+                
+                st.code(cli_command, language="bash")
+        
+        elif analysis_type == "gaze":
+            # Generate gaze command for all junctions
+            if len(st.session_state.junctions) == 1:
+                # Single junction
+                junction = st.session_state.junctions[0]
+                r_outer = st.session_state.junction_r_outer.get(0, 50.0)
+                gaze_data = list(results.values())[0] if results else {}
+                decision_mode = gaze_data.get("decision_mode", "hybrid")
+                path_length = gaze_data.get("path_length", 100.0)
+                epsilon = gaze_data.get("epsilon", 0.05)
+                linger_delta = gaze_data.get("linger_delta", 5.0)
+                
+                cli_command = f"""route-analyzer gaze \\
+  --input ./data \\
+  --columns x=Headset.Head.Position.X,z=Headset.Head.Position.Z,t=Time \\
+  --scale 0.2 \\
+  --junction {junction.cx:.1f} {junction.cz:.1f} \\
+  --radius {junction.r:.1f} \\
+  --r_outer {r_outer:.1f} \\
+  --distance {path_length:.1f} \\
+  --epsilon {epsilon:.3f} \\
+  --decision_mode {decision_mode} \\
+  --linger_delta {linger_delta:.1f} \\
+  --cluster_method {cluster_method}"""
+            else:
+                # Multiple junctions
+                junctions_str = " ".join([f"{j.cx:.1f} {j.cz:.1f} {j.r:.1f}" for j in st.session_state.junctions])
+                r_outer_list = [st.session_state.junction_r_outer.get(i, 50.0) for i in range(len(st.session_state.junctions))]
+                r_outer_str = " ".join([str(r) for r in r_outer_list])
+                gaze_data = list(results.values())[0] if results else {}
+                decision_mode = gaze_data.get("decision_mode", "hybrid")
+                path_length = gaze_data.get("path_length", 100.0)
+                epsilon = gaze_data.get("epsilon", 0.05)
+                linger_delta = gaze_data.get("linger_delta", 5.0)
+                
+                cli_command = f"""route-analyzer gaze \\
+  --input ./data \\
+  --columns x=Headset.Head.Position.X,z=Headset.Head.Position.Z,t=Time \\
+  --scale 0.2 \\
+  --junctions {junctions_str} \\
+  --r_outer_list {r_outer_str} \\
+  --distance {path_length:.1f} \\
+  --epsilon {epsilon:.3f} \\
+  --decision_mode {decision_mode} \\
+  --linger_delta {linger_delta:.1f} \\
+  --cluster_method {cluster_method}"""
+            
+            # Add cluster method specific parameters
+            if cluster_method == "dbscan" and cluster_params:
+                cli_command += f" \\\n  --min_samples {cluster_params.get('min_samples', 5)} \\\n  --angle_eps {cluster_params.get('angle_eps', 15.0)}"
+            elif cluster_method == "kmeans" and cluster_params:
+                cli_command += f" \\\n  --k {cluster_params.get('k', 3)}"
+            elif cluster_method == "auto" and cluster_params:
+                cli_command += f" \\\n  --k_min {cluster_params.get('k_min', 2)} \\\n  --k_max {cluster_params.get('k_max', 6)} \\\n  --min_sep_deg {cluster_params.get('min_sep_deg', 12.0)} \\\n  --angle_eps {cluster_params.get('angle_eps', 15.0)}"
+            
+            cli_command += f" \\\n  --out ./outputs/gaze_analysis"
+            
+            st.code(cli_command, language="bash")
+        
+        elif analysis_type == "intent":
+            # Generate intent command for all junctions
+            if len(st.session_state.junctions) == 1:
+                # Single junction
+                junction = st.session_state.junctions[0]
+                intent_data = list(results.values())[0] if results else {}
+                decision_mode = intent_data.get("decision_mode", "hybrid")
+                path_length = intent_data.get("path_length", 100.0)
+                epsilon = intent_data.get("epsilon", 0.05)
+                linger_delta = intent_data.get("linger_delta", 5.0)
+                prediction_distances = intent_data.get("prediction_distances", [100.0, 75.0, 50.0, 25.0])
+                model_type = intent_data.get("model_type", "random_forest")
+                cv_folds = intent_data.get("cv_folds", 5)
+                test_split = intent_data.get("test_split", 0.2)
+                
+                cli_command = f"""route-analyzer intent \\
+  --input ./data \\
+  --columns x=Headset.Head.Position.X,z=Headset.Head.Position.Z,t=Time \\
+  --scale 0.2 \\
+  --junction {junction.cx:.1f} {junction.cz:.1f} {junction.r:.1f} \\
+  --distance {path_length:.1f} \\
+  --epsilon {epsilon:.3f} \\
+  --decision_mode {decision_mode} \\
+  --linger_delta {linger_delta:.1f} \\
+  --cluster_method {cluster_method}"""
+            else:
+                # Multiple junctions
+                junctions_str = " ".join([f"{j.cx:.1f} {j.cz:.1f} {j.r:.1f}" for j in st.session_state.junctions])
+                intent_data = list(results.values())[0] if results else {}
+                decision_mode = intent_data.get("decision_mode", "hybrid")
+                path_length = intent_data.get("path_length", 100.0)
+                epsilon = intent_data.get("epsilon", 0.05)
+                linger_delta = intent_data.get("linger_delta", 5.0)
+                prediction_distances = intent_data.get("prediction_distances", [100.0, 75.0, 50.0, 25.0])
+                model_type = intent_data.get("model_type", "random_forest")
+                cv_folds = intent_data.get("cv_folds", 5)
+                test_split = intent_data.get("test_split", 0.2)
+                
+                cli_command = f"""route-analyzer intent \\
+  --input ./data \\
+  --columns x=Headset.Head.Position.X,z=Headset.Head.Position.Z,t=Time \\
+  --scale 0.2 \\
+  --junctions {junctions_str} \\
+  --distance {path_length:.1f} \\
+  --epsilon {epsilon:.3f} \\
+  --decision_mode {decision_mode} \\
+  --linger_delta {linger_delta:.1f} \\
+  --cluster_method {cluster_method}"""
+            
+            # Add cluster method specific parameters
+            if cluster_method == "dbscan" and cluster_params:
+                cli_command += f" \\\n  --min_samples {cluster_params.get('min_samples', 5)} \\\n  --angle_eps {cluster_params.get('angle_eps', 15.0)}"
+            elif cluster_method == "kmeans" and cluster_params:
+                cli_command += f" \\\n  --k {cluster_params.get('k', 3)}"
+            elif cluster_method == "auto" and cluster_params:
+                cli_command += f" \\\n  --k_min {cluster_params.get('k_min', 2)} \\\n  --k_max {cluster_params.get('k_max', 6)} \\\n  --min_sep_deg {cluster_params.get('min_sep_deg', 12.0)} \\\n  --angle_eps {cluster_params.get('angle_eps', 15.0)}"
+            
+            # Add intent-specific parameters
+            prediction_distances_str = " ".join([str(d) for d in prediction_distances])
+            cli_command += f" \\\n  --prediction_distances {prediction_distances_str} \\\n  --model_type {model_type} \\\n  --cv_folds {cv_folds} \\\n  --test_split {test_split}"
+            
+            cli_command += f" \\\n  --out ./outputs/intent_recognition"
             
             st.code(cli_command, language="bash")
     

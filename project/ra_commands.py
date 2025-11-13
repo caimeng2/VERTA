@@ -24,8 +24,8 @@ from .ra_geometry import Circle
 from .ra_data_loader import load_folder, load_folder_with_gaze, save_assignments, save_centers, save_centers_json, save_summary
 from .ra_metrics import _timing_for_traj, time_between_regions, speed_through_junction, junction_transit_speed
 from .ra_plotting import (
-    plot_branch_counts, plot_branch_directions, plot_decision_intercepts,
-    plot_chain_overview, plot_chain_small_multiples, plot_discover_map
+    plot_decision_intercepts,
+    plot_chain_overview, plot_chain_small_multiples
 )
 from .ra_logging import RouteAnalyzerLogger
 
@@ -211,13 +211,22 @@ class DiscoverCommand(BaseCommand):
     
     def _generate_plots(self, trajectories, assignments, centers, junction, args):
         """Generate visualization plots"""
-        # Branch directions plot
-        plot_branch_directions(centers, (junction.cx, junction.cz), 
-                             os.path.join(args.out, "Branch_Directions.png"))
-        
-        # Branch counts plot
         main_assignments = pd.read_csv(os.path.join(args.out, "branch_assignments.csv"))
-        plot_branch_counts(main_assignments, os.path.join(args.out, "Branch_Counts.png"))
+        
+        # Branch directions plot (optional - function may not exist)
+        try:
+            from .ra_plotting import plot_branch_directions
+            plot_branch_directions(centers, (junction.cx, junction.cz), 
+                                 os.path.join(args.out, "Branch_Directions.png"))
+        except (ImportError, AttributeError):
+            self.logger.warning("plot_branch_directions not available, skipping")
+        
+        # Branch counts plot (optional - function may not exist)
+        try:
+            from .ra_plotting import plot_branch_counts
+            plot_branch_counts(main_assignments, os.path.join(args.out, "Branch_Counts.png"))
+        except (ImportError, AttributeError):
+            self.logger.warning("plot_branch_counts not available, skipping")
         
         # Decision intercepts plot
         if args.plot_intercepts:
@@ -259,8 +268,9 @@ class DiscoverCommand(BaseCommand):
             except Exception as e:
                 self.logger.error(f"Intercept plot failed: {e}")
         
-        # Decision map plot (the missing one!)
+        # Decision map plot (optional - function may not exist)
         try:
+            from .ra_plotting import plot_discover_map
             plot_discover_map(
                 trajectories=trajectories,
                 assignments_df=main_assignments,
@@ -270,8 +280,8 @@ class DiscoverCommand(BaseCommand):
                 out_path=os.path.join(args.out, "Decision_Map.png")
             )
             self.logger.info("Decision map plot generated")
-        except Exception as e:
-            self.logger.error(f"Decision map plot failed: {e}")
+        except (ImportError, AttributeError, NameError) as e:
+            self.logger.warning(f"plot_discover_map not available, skipping: {e}")
 
 
 class AssignCommand(BaseCommand):
@@ -613,7 +623,7 @@ class GazeCommand(BaseCommand):
                 out_path=os.path.join(args.out, "Gaze_Directions.png"),
                 r_outer_list=rlist,
                 junction_labels=[f"Junction {i}" for i in range(len(junctions))],
-                centers_list=centers_list if 'centers_list' in locals() else None,
+                centers_list=None,  # Optional parameter - not available in this context
             )
             self.logger.info("Gaze directions plot generated")
         except Exception as e:
@@ -655,6 +665,9 @@ class GazeCommand(BaseCommand):
 # Import predict command
 from .ra_commands_predict import PredictCommand
 
+# Import intent recognition command
+from .ra_commands_intent import IntentRecognitionCommand
+
 # Command registry
 COMMANDS = {
     "discover": DiscoverCommand,
@@ -662,4 +675,5 @@ COMMANDS = {
     "metrics": MetricsCommand,
     "gaze": GazeCommand,
     "predict": PredictCommand,
+    "intent": IntentRecognitionCommand,
 }

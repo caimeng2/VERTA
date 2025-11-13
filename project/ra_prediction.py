@@ -32,7 +32,7 @@ except ImportError:
 # Get logger
 try:
     from .ra_logging import get_logger
-    logger = get_logger(__name__)
+    logger = get_logger()
 except ImportError:
     import logging
     logger = logging.getLogger(__name__)

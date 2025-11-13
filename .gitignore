@@ -5,3 +5,5 @@
 /outputs
 /outputs_changed_junction
 /outputs_probe
+/project/__pycache__
+*.pyc
