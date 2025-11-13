@@ -8,7 +8,7 @@ Launch the VERTA (Virtual Environment Route and Trajectory Analyzer) web UI from
 Usage:
   python gui/launch.py
   # or
-  streamlit run route_analyzer/ra_gui.py
+  streamlit run src/route_analyzer/ra_gui.py
 """
 
 import os
@@ -22,8 +22,8 @@ def main() -> int:
     this_file = Path(__file__).resolve()
     repo_root = this_file.parent.parent
 
-    # Path to GUI app
-    gui_path = repo_root / "route_analyzer" / "ra_gui.py"
+    # Path to GUI app (in src/ layout)
+    gui_path = repo_root / "src" / "route_analyzer" / "ra_gui.py"
     if not gui_path.exists():
         print(f"GUI entry not found at: {gui_path}")
         return 1

@@ -15,7 +15,7 @@ pip install -r gui/requirements.txt
 python gui/launch.py
 
 # Option 2: Direct Streamlit command to GUI module
-streamlit run route_analyzer/ra_gui.py
+streamlit run src/route_analyzer/ra_gui.py
 ```
 
 ### 3. Open in Browser
@@ -151,7 +151,7 @@ python -c "import streamlit; print('Streamlit OK')"
 cd /path/to/route_analyzer
 
 # Check project structure
-ls route_analyzer/ra_gui.py
+ls src/route_analyzer/ra_gui.py
 ```
 
 **Performance issues:**

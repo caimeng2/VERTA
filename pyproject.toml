@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=61.0", "wheel"]
+requires = ["setuptools>=77.0.3", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -8,6 +8,37 @@ version = "0.1.0"
 description = "VERTA - Virtual Environment Route and Trajectory Analyzer: A comprehensive toolkit for analyzing route choices and trajectories in virtual environments"
 readme = "README.md"
 requires-python = ">=3.8"
+license = {text = "MIT"}
+license-files = ["LICENSE"]
+authors = [
+    {name = "ruedi99ms"}
+]
+keywords = [
+    "trajectory-analysis",
+    "route-analysis",
+    "virtual-reality",
+    "vr",
+    "behavioral-analysis",
+    "machine-learning",
+    "intent-recognition",
+    "gaze-tracking",
+    "spatial-analysis"
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Scientific/Engineering :: Visualization",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
 dependencies = [
     "numpy>=1.20.0",
     "pandas>=1.3.0", 
@@ -26,8 +57,16 @@ test = ["pytest>=7.0.0"]
 [project.scripts]
 route-analyzer = "route_analyzer.__main__:main"
 
+[project.urls]
+# Uncomment and update these when you have a repository:
+# Homepage = "https://github.com/yourusername/route_analyzer"
+# Documentation = "https://github.com/yourusername/route_analyzer#readme"
+# Repository = "https://github.com/yourusername/route_analyzer"
+# Issues = "https://github.com/yourusername/route_analyzer/issues"
+
 [tool.setuptools]
 packages = ["route_analyzer"]
+package-dir = {"" = "src"}
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -43,4 +82,4 @@ markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
     "integration: marks tests as integration tests",
 ]
-pythonpath = ["."]
+pythonpath = ["src", "."]

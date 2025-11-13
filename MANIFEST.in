@@ -1,0 +1,34 @@
+# Include important non-Python files
+include README.md
+include LICENSE
+include pyproject.toml
+include config.yaml
+
+# Include GUI files
+recursive-include gui *.py *.md *.txt
+
+# Include example scripts
+recursive-include examples_intent *.py *.md
+
+# Exclude test data and outputs (but allow config files)
+global-exclude *.csv
+global-exclude *.npy
+global-exclude *.png
+# Note: JSON files in output directories are excluded via prune directives below
+# Config files (like config.yaml) are explicitly included above
+global-exclude __pycache__
+global-exclude *.pyc
+global-exclude *.pyo
+global-exclude .pytest_cache
+global-exclude *.egg-info
+global-exclude dist
+global-exclude build
+
+# Exclude output directories
+prune data_assign
+prune data_full
+prune gui_outputs
+prune out_metrics
+prune outputs
+prune outputs_changed_junction
+prune outputs_probe

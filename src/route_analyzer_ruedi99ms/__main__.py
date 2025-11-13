@@ -45,7 +45,7 @@ import argparse
 import sys
 from typing import Optional, Sequence
 
-from route_analyzer.ra_commands import COMMANDS, EnhancedChainCommand
+from route_analyzer.ra_commands import COMMANDS
 from route_analyzer.ra_config import load_config_file, overlay_config_on_namespace, parse_columns
 from route_analyzer.ra_validation import validate_args
 from route_analyzer.ra_logging import get_logger
@@ -62,16 +62,11 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
     # Create subparsers for commands
     subparsers = parser.add_subparsers(dest="cmd", help="Available commands")
     
-    # Register all commands
+    # Register all commands (including chain-enhanced which is in COMMANDS)
     for cmd_name, cmd_class in COMMANDS.items():
         cmd_instance = cmd_class()
         subparser = subparsers.add_parser(cmd_name, help=f"{cmd_name} command")
         cmd_instance.add_arguments(subparser)
-    
-    # Add enhanced chain command
-    enhanced_chain_instance = EnhancedChainCommand()
-    subparser = subparsers.add_parser("chain-enhanced", help="Enhanced multi-junction decision chain analysis with evacuation planning features")
-    enhanced_chain_instance.add_arguments(subparser)
     
     # Parse arguments
     args = parser.parse_args(argv)
@@ -107,10 +102,7 @@ def main(argv: Optional[Sequence[str]] = None) -> None:
     
     # Execute command
     try:
-        if cmd == "chain-enhanced":
-            cmd_instance = EnhancedChainCommand()
-        else:
-            cmd_instance = COMMANDS[cmd]()
+        cmd_instance = COMMANDS[cmd]()
         cmd_instance.execute(args)
     except Exception as e:
         logger.error(f"Command execution failed: {e}")

@@ -27,7 +27,7 @@ pip install -r gui/requirements.txt
 # Launch the web interface
 python gui/launch.py
 # or
-streamlit run route_analyzer/ra_gui.py
+streamlit run src/route_analyzer/ra_gui.py
 ```
 
 See [`gui/README.md`](gui/README.md) for detailed GUI documentation.
@@ -453,7 +453,7 @@ pip install -r gui/requirements.txt
 python -c "import streamlit; print('Streamlit OK')"
 
 # Launch with explicit path
-streamlit run route_analyzer/ra_gui.py
+streamlit run src/route_analyzer/ra_gui.py
 ```
 
 **No trajectories loaded:**
