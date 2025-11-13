@@ -1,5 +1,12 @@
 # Intent Recognition Guide - VERTA
 
+This folder contains comprehensive documentation and example scripts for VERTA's Intent Recognition feature.
+
+**Contents:**
+- **`README.md`** (this file) - Complete guide to Intent Recognition
+- **`example_load_intent_models.py`** - Load and use trained models for real-time prediction
+- **`visualize_intent_concepts.py`** - Visualize intent recognition concepts and results
+
 ## 🧠 Overview
 
 Intent Recognition uses machine learning to predict user route choices **before** they reach decision points. This enables proactive systems, predictive content loading, and adaptive environments.
@@ -482,5 +489,5 @@ Intent Recognition enables **predictive** rather than **reactive** systems by le
 
 ---
 
-For more information, see [`gui/README.md`](gui/README.md) and the main [README.md](README.md).
+For more information, see [`gui/README.md`](../gui/README.md) and the main [README.md](../README.md).
 

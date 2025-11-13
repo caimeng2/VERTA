@@ -61,6 +61,8 @@ Predict user route choices **before** they reach decision points using machine l
 - Dynamic environment optimization
 - A/B testing of early interventions
 
+📚 **Documentation**: See [`examples_intent/README.md`](examples_intent/README.md) for a comprehensive guide to Intent Recognition, including usage examples, model loading, and integration into VR systems.
+
 See [`gui/README.md`](gui/README.md) for detailed GUI documentation.
 
 ## CLI Commands
