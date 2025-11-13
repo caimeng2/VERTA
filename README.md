@@ -328,11 +328,12 @@ discover:
 
 ### Optional Dependencies
 
-Install with `pip install .[extras]`:
+Install with `pip install .[yaml]`, `pip install .[parquet]`, `pip install .[gui]`, or `pip install .[test]`:
 
 - **yaml** - YAML configuration file support (`pyyaml`)
 - **parquet** - Parquet file format support (`pyarrow`)
 - **gui** - Web GUI dependencies (`streamlit`, `plotly`)
+- **test** - Testing dependencies (`pytest>=7.0.0`)
 
 ### GUI-Specific Dependencies
 
@@ -344,8 +345,8 @@ pip install -r requirements_gui.txt
 Additional GUI packages:
 - **streamlit** (≥1.28.0) - Web framework
 - **plotly** (≥5.15.0) - Interactive plotting
-- **streamlit-option-menu** (≥0.3.0) - Enhanced UI components
-- **streamlit-aggrid** (≥0.3.0) - Data grid components
+
+Note: Core dependencies (numpy, pandas, matplotlib, seaborn) are included in the main package installation.
 
 ## Troubleshooting
 

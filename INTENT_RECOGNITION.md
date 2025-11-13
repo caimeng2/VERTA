@@ -1,4 +1,4 @@
-# Intent Recognition Guide
+# Intent Recognition Guide - VERTA
 
 ## 🧠 Overview
 

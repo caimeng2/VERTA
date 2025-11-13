@@ -1,8 +1,8 @@
 """
-Route Analyzer Web GUI
-=====================
+VERTA Web GUI
+=============
 
-A Streamlit-based web interface for the Route Analyzer package.
+A Streamlit-based web interface for VERTA (Virtual Environment Route and Trajectory Analyzer).
 Provides interactive junction management and real-time analysis.
 
 Usage:
@@ -51,7 +51,7 @@ from route_analyzer.ra_logging import get_logger
 
 # Configure Streamlit page
 st.set_page_config(
-    page_title="Route Analyzer",
+    page_title="VERTA",
     page_icon="🗺️",
     layout="wide",
     initial_sidebar_state="expanded"
