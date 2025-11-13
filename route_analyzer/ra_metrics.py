@@ -111,9 +111,7 @@ def _convert_generic_string_format(t_data: np.ndarray) -> Optional[np.ndarray]:
 def time_to_distance_after_junction(tr: Trajectory,
                                     junction: Circle,
                                     path_length: float) -> float:
-    """Time (seconds) from first entering `junction` until cumulative traveled
-    distance along the path reaches `path_length`. Returns NaN if no time data
-    or cannot be computed.
+    """Time (seconds) from first entering `junction` until cumulative traveled distance along the path reaches `path_length`. Returns NaN if no time data or cannot be computed.
     """
     if tr.t is None:
         return float("nan")
@@ -149,8 +147,7 @@ def time_from_junction_to_radial_exit(
     min_outward: float = 0.0,
 ) -> float:
     """
-    Time (seconds) from first entering `junction` until the trajectory crosses r_outer
-    with a non-negative (or >= min_outward) outward trend. NaN if no time or no crossing.
+    Time (seconds) from first entering `junction` until the trajectory crosses r_outer with a non-negative (or >= min_outward) outward trend. NaN if no time or no crossing.
     """
     if tr.t is None:
         return float("nan")
@@ -181,9 +178,7 @@ def time_from_junction_to_radial_exit(
 def time_between_regions(tr: Trajectory,
                          A: Rect | Circle,
                          B: Rect | Circle) -> Tuple[float, float, float]:
-    """Return (t_A, t_B, dt) where t_A is the first timestamp when trajectory is in
-    region A, t_B for region B, and dt = t_B - t_A. Returns (nan, nan, nan) if
-    timestamps missing or sequence invalid.
+    """Return (t_A, t_B, dt) where t_A is the first timestamp when trajectory is in region A, t_B for region B, and dt = t_B - t_A. Returns (nan, nan, nan) if timestamps missing or sequence invalid.
     """
     if tr.t is None:
         return (float("nan"), float("nan"), float("nan"))

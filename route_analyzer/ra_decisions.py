@@ -1,6 +1,4 @@
-# ------------------------------
 # Route-decision extraction
-# ------------------------------
 
 from collections import Counter
 import math
@@ -165,7 +163,7 @@ def first_unit_vector_after_distance(
                 rad_now = float(np.hypot(x[start + i] - origin_region.cx,
                                         z[start + i] - origin_region.cz))
                 if rad_now < min_radial:
-                    continue  # NEW: keep scanning for a later, farther step
+                    continue  # keep scanning for a later, farther step
                 v = np.array([dx[j], dz[j]]) / seg[j]
                 return v
 
@@ -222,8 +220,7 @@ def first_unit_vector_after_radial_exit(
         if r[i] >= r_outer:
             j0 = max(start + 1, i - window)
             seg = r[j0:i+1]
-            # Robust outward-trend test: if we don't have at least 2 samples,
-            # accept (avoids "mean of empty slice" warning)
+            # Robust outward-trend test: if we don't have at least 2 samples, accept (avoids "mean of empty slice" warning)
             if seg.size >= 2:
                 outward = float(np.nanmean(np.diff(seg))) >= 0.0
             else:
@@ -379,7 +376,7 @@ def discover_branches(trajectories: Sequence[Trajectory],
 
             if decision_idx is None:
                 # Don't assign trajectories without proper decision points
-                # Mark as "entered but no decision" (branch -1 in *all*)
+                # Mark as *entered but no decision* (branch -1 in *all*)
                 assign_all_rows.append({"trajectory": tr.tid, "branch": -1})
                 diags.append({"trajectory": tr.tid, "used": False, "reason": "no_decision_point"})
                 continue
@@ -427,9 +424,6 @@ def discover_branches(trajectories: Sequence[Trajectory],
     diag_df = pd.DataFrame(diags)
     diag_df.to_csv(os.path.join(out_dir, "discover_diag_reasons.csv"), index=False)
 
-
-
-
     logger.info(f"trajectories: {len(trajectories)}  extracted_vectors: {len(vecs)}")
 
     # Optional CSV diagnostics
@@ -442,7 +436,6 @@ def discover_branches(trajectories: Sequence[Trajectory],
             logger.debug(f"decision_mode_used -> {os.path.join(out_dir, 'decision_mode_used.csv')}")
         except Exception as e:
             logger.warning(f"could not write diagnostics: {e}")
-
 
     n_noentry = sum(1 for r in assign_all_rows if r["branch"] == -2)
     n_off     = sum(1 for r in assign_all_rows if r["branch"] == -1)
@@ -518,7 +511,7 @@ def discover_branches(trajectories: Sequence[Trajectory],
     assignments = pd.DataFrame({"trajectory": ids, "branch": labels})
     assignments_all = pd.concat([assignments, pd.DataFrame(assign_all_rows)], ignore_index=True)
 
-    # Summary (main branches only, >=0) stays the same using `assignments`
+    # Summary (main branches only, >=0) stays the same using *assignments*
     mask_main = assignments["branch"] >= 0
     cnt = Counter(assignments.loc[mask_main, "branch"])
     total = int(mask_main.sum())
@@ -696,13 +689,7 @@ def compute_assignment_vectors(
     return pd.DataFrame(rows)
 
 
-
-
-
-
-# ------------------------------
 # Multi-junction decision chains
-# ------------------------------
 
 def discover_decision_chain(
     trajectories: Sequence[Trajectory],

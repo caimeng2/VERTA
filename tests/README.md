@@ -73,11 +73,6 @@ The test suite currently includes:
 - `test_commands.py`: Tests for command classes (BaseCommand, DiscoverCommand, AssignCommand, MetricsCommand, GazeCommand)
 - `test_data_loader.py`: Tests for data loading functionality (Trajectory, ColumnMapping, has_gaze_data, has_physio_data)
 
-**Current Test Status:**
-- ✅ All 40 tests passing
-- ✅ Tests run successfully with proper package structure
-- ✅ Tests use proper absolute imports from `route_analyzer` package
-
 ## Adding New Tests
 
 When adding new test files:
@@ -102,16 +97,6 @@ class TestCircle:
         assert circle.cz == 2.0
         assert circle.r == 3.0
 ```
-
-## Test Coverage Summary
-
-The test suite currently covers:
-
-- **Geometry Module**: Circle and Rect classes, contains() methods, entered_junction_idx function
-- **Data Loader Module**: Trajectory creation (basic, with time, with gaze), ColumnMapping, gaze/physio data detection
-- **Commands Module**: CommandConfig, BaseCommand, DiscoverCommand, AssignCommand, MetricsCommand, GazeCommand, PredictCommand, IntentRecognitionCommand, EnhancedChainCommand argument parsing
-
-**Test Count**: 40 tests across 3 test files
 
 ## Troubleshooting
 

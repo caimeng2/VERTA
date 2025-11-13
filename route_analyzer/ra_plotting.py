@@ -1,6 +1,5 @@
 """
 Route Analyzer Plotting Module
-=============================
 
 This module provides plotting functions for trajectory analysis and visualization.
 """
@@ -30,7 +29,7 @@ class PlotConfig:
     figsize: Tuple[float, float] = (12, 8)
     tight_layout: bool = True
     
-    # Color settings
+    # Color settings - colors are used again if more than 10 branches
     branch_colors: Tuple[str, ...] = ('#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf')
     
     # Font settings
@@ -69,8 +68,6 @@ class PlotConfig:
 
 # Default plot configuration instance
 DEFAULT_PLOT_CONFIG = PlotConfig()
-
-
 
 
 def _draw_tilted_rectangle(ax, zone, color, label, zorder=2):
@@ -433,14 +430,13 @@ def plot_flow_graph_map(
     out_path: str = "Flow_Graph_Map.png",
     junction_names: Optional[List[str]] = None,
     show_junction_names: bool = True,
-    min_flow_threshold: float = 0.001,  # Reduced from 0.01 to show flows as low as 0.1%
+    min_flow_threshold: float = 0.001,
     arrow_scale: float = 1.0,
     cached_sequences: Optional[Dict[int, List[int]]] = None,
 ) -> None:
     """Map-style flow graph showing flow percentages between junctions.
     
-    Shows arrows between junctions indicating what percentage of trajectories
-    go directly from each source to each destination.
+    Shows arrows between junctions indicating what percentage of trajectories go directly from each source to each destination.
     
     Args:
         trajectories: List of Trajectory objects
@@ -625,8 +621,7 @@ def plot_per_junction_flow_graph(
 ) -> None:
     """Map-style flow graph showing percentages per junction including zones.
     
-    Shows arrows between junctions and zones indicating what percentage of trajectories
-    leaving each junction go directly to each destination.
+    Shows arrows between junctions and zones indicating what percentage of trajectories leaving each junction go directly to each destination.
     
     Args:
         trajectories: List of Trajectory objects
@@ -876,17 +871,9 @@ def _track_trajectory_junction_sequence(
         x, z = trajectory.x[point_idx], trajectory.z[point_idx]
         points_processed += 1
         
-        # Debug: Log only first 5 points and every 1000th point (much less verbose)
-        #if point_idx < 5 or point_idx % 1000 == 0:
-        #    print(f"🔍 DEBUG: Point {point_idx}: ({x:.1f}, {z:.1f})")
-        
         # Check if we're at a new junction
         for junction_idx, (junction, r_outer) in enumerate(zip(junctions, r_outer_list)):
             distance = np.sqrt((x - junction.cx)**2 + (z - junction.cz)**2)
-            
-            # Debug: Log distance checks only for first 3 points
-            #if point_idx < 3:
-            #    print(f"🔍 DEBUG: Point {point_idx} to Junction {junction_idx}: distance={distance:.1f}, r_outer={r_outer}")
             
             if distance <= r_outer:
                 junction_detections += 1
@@ -899,8 +886,8 @@ def _track_trajectory_junction_sequence(
             # Not at any junction
             current_junction = None
     
-    print(f"🔍 DEBUG: Trajectory {traj_id} final sequence: {sequence}")
-    print(f"🔍 DEBUG: Total junction detections: {junction_detections}, Points processed: {points_processed}")
+    print(f"DEBUG: Trajectory {traj_id} final sequence: {sequence}")
+    print(f"DEBUG: Total junction detections: {junction_detections}, Points processed: {points_processed}")
     
     return sequence
 
@@ -933,7 +920,7 @@ def _calculate_per_junction_flows(
                         flow_counts[from_junc, to_junc] += 1
                         junction_exits[from_junc] += 1
     else:
-        print(f"🔍 DEBUG: No cached sequences provided, doing spatial tracking for {len(trajectories)} trajectories")
+        print(f"DEBUG: No cached sequences provided, doing spatial tracking for {len(trajectories)} trajectories")
         # Use spatial tracking to determine junction visit sequences
         for tr_idx, tr in enumerate(trajectories):
             # Track junction sequence for this trajectory using spatial tracking
@@ -1261,11 +1248,9 @@ def _track_trajectory_node_sequence(
     Track the temporal sequence of node visits for a trajectory.
     
     Returns list of node indices in the order they were visited.
-    Node indices: 0 to n_junctions-1 for junctions, n_junctions to n_junctions+n_start_zones-1 for start zones,
-    n_junctions+n_start_zones to n_junctions+n_start_zones+n_end_zones-1 for end zones.
+    Node indices: 0 to n_junctions-1 for junctions, n_junctions to n_junctions+n_start_zones-1 for start zones, n_junctions+n_start_zones to n_junctions+n_start_zones+n_end_zones-1 for end zones.
     
-    This function prioritizes nodes by TEMPORAL ORDER (which is reached first along the trajectory path),
-    not by distance or type priority.
+    This function prioritizes nodes by temporal order (which is reached first along the trajectory path), not by distance or type priority.
     """
     sequence = []
     current_node = None

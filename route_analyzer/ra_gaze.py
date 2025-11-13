@@ -1,6 +1,4 @@
-# ------------------------------
 # Gaze and Head Tracking Analysis
-# ------------------------------
 
 from dataclasses import dataclass
 from typing import List, Optional, Dict, Tuple, Sequence
@@ -16,7 +14,6 @@ except ImportError:
     from ra_geometry import Circle
     from ra_data_loader import Trajectory
     from ra_decisions import get_decision_index
-
 
 
 
@@ -178,7 +175,7 @@ def compute_head_yaw_at_decisions(
                 print(f"[gaze_debug] Using precomputed decision point for trajectory {tr.tid}: idx={pre_idx}, x={pre_x}, z={pre_z}")
             else:
                 print(f"[gaze_debug] No precomputed decision point for trajectory {tr.tid}: pre_idx={pre_idx}, pre_x={pre_x}, pre_z={pre_z}")
-                # Find decision intercept using the SAME logic as discover analysis
+                # Find decision intercept using the same logic as discover analysis
                 # This ensures arrows are plotted at the exact same points used for branch assignment
                 r_out = r_outer_list[i]
                 
@@ -277,7 +274,6 @@ def compute_head_yaw_at_decisions(
                     print(f"[head_yaw_debug] Cannot calculate head_yaw for trajectory {tr.tid}, branch {int(branch)} - missing data or invalid index")
             
             # Movement direction at decision point
-            # CRITICAL FIX: Add proper bounds checking for movement direction
             if (
                 valid_idx is not None
                 and valid_idx > 0
@@ -361,7 +357,7 @@ def analyze_physiological_at_junctions(
     """
     Analyze physiological data (heart rate, pupil dilation) at decision points.
     
-    Uses Option A baseline strategy:
+    Calculation method:
     - Baseline: Average during 2-5 seconds BEFORE entering junction radius (normal navigation)
     - Decision: Average during junction approach period (from entry to exit) (decision-making context)
     """
@@ -575,7 +571,7 @@ def analyze_physiological_at_junctions(
                     if len(pupil_decision_data) > 0:
                         pupil_decision = np.mean(pupil_decision_data)
             
-            # Debug: Check if we have valid physiological data
+            # Debug: Check if valid physiological data is available
             if tr.tid in [0, 1, 2, 3, 4]:  # Debug first few trajectories
                 print(f"[physio_debug] Trajectory {tr.tid} at junction {i}: hr_baseline={hr_baseline}, hr_decision={hr_decision}, pupil_baseline={pupil_baseline}, pupil_decision={pupil_decision}")
                 print(f"[physio_debug] Decision time: {decision_time}, Entry time: {entry_time}")
@@ -778,8 +774,7 @@ def plot_gaze_directions_at_junctions(
         print(f"[gaze_plot_debug] Junction {j_idx}: Available junction indices in gaze_df: {sorted(gaze_df['junction'].unique())}")
         print(f"[gaze_plot_debug] Junction {j_idx}: Total gaze_df rows: {len(gaze_df)}")
         
-        # Handle individual junction data: if we only have data for one junction,
-        # use all the data regardless of junction index
+        # Handle individual junction data: if we only have data for one junction, use all the data regardless of junction index
         available_junction_indices = sorted(gaze_df['junction'].unique())
         if len(available_junction_indices) == 1:
             # Single junction data - use all data
@@ -829,8 +824,7 @@ def plot_gaze_directions_at_junctions(
         # Gaze arrows with scaling based on r_outer
         cmap = plt.get_cmap("tab10")
 
-        # Use the original discover branch IDs directly for colors so they
-        # match the intercept plot (Branch 0→blue, Branch 1→orange, ...).
+        # Use the original discover branch IDs directly for colors so they match the intercept plot
         unique_branches = sorted(junction_gaze["branch"].unique()) if len(junction_gaze) else []
         branch_remap = {int(b): int(b) for b in unique_branches}
         

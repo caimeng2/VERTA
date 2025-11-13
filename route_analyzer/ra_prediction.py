@@ -81,28 +81,17 @@ def analyze_junction_choice_patterns(
     # Initialize progress manager
     progress_manager = AnalysisProgressManager(gui_mode)
     progress_manager.add_step("Conditional Probabilities", weight=2.0)
-    progress_manager.add_step("Start/End Analysis", weight=1.5)
-    progress_manager.add_step("Prediction Examples", weight=1.0)
     progress_manager.add_step("Visualizations", weight=1.5)
     
     progress_manager.start_analysis(len(trajectories))
     
-    # Step 1: Analyze conditional probabilities
+    # Analyze conditional probabilities
     step_tracker = progress_manager.start_step("Conditional Probabilities", len(trajectories))
     conditional_probs, cached_sequences = _analyze_conditional_probabilities(trajectories, junctions, r_outer_list, step_tracker)
     step_tracker.close()
     progress_manager.update_overall_progress(1.0)
     
-    # Step 2: Skip start/end analysis - focus on junctions only
-    
-    # Step 3: Generate prediction examples (removed - using interactive tool instead)
-    # step_tracker = progress_manager.start_step("Prediction Examples", 10)  # Generate 10 examples
-    # analyzer = JunctionChoiceAnalyzer(trajectories, junctions, r_outer_list)
-    # prediction_examples = _generate_prediction_examples(analyzer, conditional_probs)
-    # step_tracker.close()
-    progress_manager.update_overall_progress(1.0)
-    
-    # Step 4: Create visualizations
+    # Create visualizations
     step_tracker = progress_manager.start_step("Visualizations", 1)
     _create_conditional_probability_visualization(conditional_probs, output_dir)
     _create_flow_graph_visualizations(trajectories, junctions, r_outer_list, output_dir, chain_df, cached_sequences)
@@ -113,7 +102,7 @@ def analyze_junction_choice_patterns(
     # Compile results
     results = {
         'conditional_probabilities': conditional_probs,
-        'cached_sequences': cached_sequences,  # Store cached sequences for interactive tool
+        'cached_sequences': cached_sequences,  # Cached for interactive prediction tool
         'summary': {
             'total_trajectories': len(trajectories),
             'total_junctions': len(junctions),

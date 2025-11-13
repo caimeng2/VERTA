@@ -25,15 +25,15 @@ def main() -> int:
     # Path to GUI app
     gui_path = repo_root / "route_analyzer" / "ra_gui.py"
     if not gui_path.exists():
-        print(f"❌ GUI entry not found at: {gui_path}")
+        print(f"GUI entry not found at: {gui_path}")
         return 1
 
     # Ensure Streamlit is available
     try:
         import streamlit  # noqa: F401
     except Exception:
-        print("❌ Streamlit is not installed.")
-        print("💡 Install GUI deps first: pip install -r requirements_gui.txt")
+        print("Streamlit is not installed.")
+        print("Install GUI deps first: pip install -r requirements_gui.txt")
         return 1
 
     # Build streamlit command
@@ -42,8 +42,8 @@ def main() -> int:
     # Run with repository root as CWD so absolute imports work
     cwd = repo_root
 
-    print("🚀 Launching VERTA GUI...")
-    print("   If the browser doesn't open automatically, visit: http://localhost:8501\n")
+    print("Launching VERTA GUI...")
+    print("If the browser doesn't open automatically, visit: http://localhost:8501\n")
 
     # Inherit env and run
     env = os.environ.copy()
@@ -53,7 +53,7 @@ def main() -> int:
     except KeyboardInterrupt:
         return 0
     except Exception as e:
-        print(f"❌ Failed to launch GUI: {e}")
+        print(f"Failed to launch GUI: {e}")
         return 1
 
 

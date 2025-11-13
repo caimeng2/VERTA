@@ -188,35 +188,8 @@ class AnalysisProgressManager:
             self.time_status.text("")
         else:
             print("\n" + "=" * 50)
-            print("✅ Analysis Complete!")
+            print("Analysis Complete!")
             print("=" * 50)
-
-
-@contextmanager
-def progress_context(total: int, description: str = "Processing", gui_mode: bool = False):
-    """Context manager for progress tracking."""
-    tracker = ProgressTracker(total, description, gui_mode)
-    try:
-        yield tracker
-    finally:
-        tracker.close()
-
-
-def track_trajectory_processing(trajectories: List, func: Callable, 
-                               description: str = "Processing trajectories",
-                               gui_mode: bool = False, **kwargs):
-    """Process trajectories with progress tracking."""
-    tracker = ProgressTracker(len(trajectories), description, gui_mode)
-    
-    results = []
-    for i, trajectory in enumerate(trajectories):
-        result = func(trajectory, **kwargs)
-        results.append(result)
-        tracker.update(1, f"Processing trajectory {i+1}/{len(trajectories)}")
-    
-    tracker.close()
-    return results
-
 
 def estimate_analysis_time(trajectories: int, junctions: int, analysis_type: str) -> Dict[str, float]:
     """Estimate analysis time based on data size and analysis type."""
@@ -258,8 +231,8 @@ def show_analysis_estimate(trajectories: int, junctions: int, analysis_type: str
         time_str = f"{estimate['estimated_hours']:.1f} hours"
     
     if gui_mode:
-        st.info(f"📊 **Analysis Estimate**: {time_str} for {trajectories} trajectories and {junctions} junctions")
+        st.info(f"**Analysis Estimate**: {time_str} for {trajectories} trajectories and {junctions} junctions")
     else:
-        print(f"📊 Analysis Estimate: {time_str} for {trajectories} trajectories and {junctions} junctions")
+        print(f"Analysis Estimate: {time_str} for {trajectories} trajectories and {junctions} junctions")
     
     return estimate

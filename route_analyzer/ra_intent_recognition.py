@@ -1,8 +1,7 @@
 """
 Intent Recognition Module for Route Analyzer
 
-Predicts user route choices BEFORE they reach decision points using
-machine learning on trajectory, gaze, and physiological features.
+Predicts user route choices before they reach decision points using machine learning on trajectory, gaze, and physiological features.
 """
 
 import os
@@ -29,8 +28,8 @@ try:
     SKLEARN_AVAILABLE = True
 except ImportError:
     SKLEARN_AVAILABLE = False
-    print("⚠️  scikit-learn not available. Intent recognition features disabled.")
-    print("   Install with: pip install scikit-learn")
+    print("scikit-learn not available. Intent recognition features disabled.")
+    print("Install with: pip install scikit-learn")
 
 try:
     from .ra_data_loader import Trajectory, has_gaze_data, has_physio_data
@@ -182,7 +181,7 @@ class IntentRecognitionAnalyzer:
             (np.sqrt(dx**2 + dz**2) + 1e-6)
         ))
         
-        # === KINEMATIC FEATURES ===
+        # Kinematic Features
         dx_seg = np.diff(tr.x[start_idx:idx+1])
         dz_seg = np.diff(tr.z[start_idx:idx+1])
         speeds = np.sqrt(dx_seg**2 + dz_seg**2)
@@ -218,10 +217,10 @@ class IntentRecognitionAnalyzer:
         ))
         sinuosity = path_length / (straight_line + 1e-6)
         
-        # === TEMPORAL FEATURES ===
+        # Temporal Features
         time_to_junction = (dist_to_junction - junction.r) / (current_speed + 1e-6)
         
-        # === GAZE FEATURES ===
+        # Gaze Features
         gaze_angle = None
         gaze_alignment = None
         head_rotation_rate = None
@@ -243,7 +242,7 @@ class IntentRecognitionAnalyzer:
                 if len(head_angles) >= 2:
                     head_rotation_rate = float(np.std(np.diff(head_angles)))
         
-        # === PHYSIOLOGICAL FEATURES ===
+        # Physiological Features
         heart_rate_val = None
         heart_rate_trend = None
         pupil_dilation = None

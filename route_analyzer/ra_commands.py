@@ -1141,7 +1141,7 @@ class IntentRecognitionCommand(BaseCommand):
         with open(results_path, 'w') as f:
             json.dump(json_results, f, indent=2, default=str)
         
-        logger.info(f"\n✅ Intent Recognition analysis complete! Results saved to {args.out}")
+        logger.info(f"\nIntent Recognition analysis complete! Results saved to {args.out}")
         logger.info(f"   - Models saved in: junction_*/models/")
         logger.info(f"   - Summary: intent_recognition_summary.csv")
         logger.info(f"   - Full results: intent_recognition_results.json")

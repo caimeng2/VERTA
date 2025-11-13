@@ -1,6 +1,4 @@
-# ------------------------------
 # Geometry helpers
-# ------------------------------
 
 from dataclasses import dataclass
 
